@@ -4,6 +4,7 @@ import { ROOM_CARDS } from '../data/gameData';
 import { computeRoomAnswer, getPlayerColor, isEvilRole } from '../utils/gameLogic';
 import { playFailSound, playPassSound } from '../utils/sound';
 import { TimerWidget } from './TimerWidget';
+import { SeatingChart } from './SeatingChart';
 import {
   Compass,
   Check,
@@ -19,6 +20,8 @@ import {
   ChevronRight,
   SlidersHorizontal,
   CheckCircle2,
+  Ghost,
+  CircleDot,
 } from 'lucide-react';
 
 interface RoomsTabProps {
@@ -49,6 +52,9 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   const [numericParam, setNumericParam] = useState<number>(1);
   const [answerGiven, setAnswerGiven] = useState<string>('');
   
+  // Table view toggle state
+  const [showSeatingTable, setShowSeatingTable] = useState<boolean>(false);
+
   // Card Picker Sheet State
   const [isCardPickerOpen, setIsCardPickerOpen] = useState<boolean>(false);
   const [questionSearch, setQuestionSearch] = useState<string>('');
@@ -284,6 +290,40 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Quick Seating Table & Spirits Access Banner */}
+        <div className="bg-zinc-900/60 rounded-xl p-2.5 border border-zinc-800/80 mb-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CircleDot className="w-4 h-4 text-rose-400" />
+              <span className="text-xs font-semibold text-zinc-200">
+                Seating Order & Spirits Table
+              </span>
+              {gameState.chosenBlessingId === 3 && (
+                <span className="px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-800 text-[10px] font-mono font-bold flex items-center gap-1">
+                  <Ghost className="w-3 h-3 text-purple-400" />
+                  Spirits Active
+                </span>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowSeatingTable(prev => !prev)}
+              className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-colors flex items-center gap-1"
+            >
+              {showSeatingTable ? 'Hide Table' : 'Show Table'}
+            </button>
+          </div>
+
+          {showSeatingTable && (
+            <div className="pt-2 border-t border-zinc-800">
+              <SeatingChart
+                players={players}
+                restlessSpirits={gameState.chosenBlessingId === 3 ? gameState.restlessSpirits : undefined}
+              />
+            </div>
+          )}
         </div>
 
         {/* 1. ELEGANT CARD DISPLAY CONTAINER */}
@@ -619,6 +659,26 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 Storyteller Assistant (Renfield's Oracle)
               </span>
             </div>
+
+            {gameState.chosenBlessingId === 3 && (
+              <div className="p-2 rounded-lg bg-purple-950/40 border border-purple-800/60 flex items-center gap-2 text-[11px] text-purple-200">
+                <Ghost className="w-3.5 h-3.5 text-purple-400 flex-shrink-0 animate-pulse" />
+                <div>
+                  <span className="font-bold">Blessing #3 Spirits Factored In: </span>
+                  {gameState.restlessSpirits && gameState.restlessSpirits.length > 0 ? (
+                    <span>
+                      {gameState.restlessSpirits.map((s, idx) => (
+                        <span key={idx} className="mr-2">
+                          #{idx + 1}: {s.alignment === 'evil' ? '🔴 Evil' : '🔵 Good'} (Seats {s.betweenSeatA}&{s.betweenSeatB})
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span>2 Spirits placed between seats</span>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-900/50 flex items-center justify-between text-xs">
               <div>

@@ -1,8 +1,9 @@
 import React from 'react';
-import { DarkBlessingId, GameState, HunterType, Player } from '../types/game';
+import { DarkBlessingId, GameState, HunterType, Player, RestlessSpirit } from '../types/game';
 import { DARK_BLESSINGS, HUNTERS } from '../data/gameData';
 import { getPlayerColor } from '../utils/gameLogic';
-import { Moon, Eye, EyeOff, Sparkles, AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Moon, Eye, EyeOff, Sparkles, AlertTriangle, ArrowRight, CheckCircle2, Ghost } from 'lucide-react';
+import { SeatingChart } from './SeatingChart';
 
 interface NightTabProps {
   gameState: GameState;
@@ -15,21 +16,57 @@ export const NightTab: React.FC<NightTabProps> = ({
   setGameState,
   onFinishNight,
 }) => {
-  const { players, chosenBlessingId, excludedBlessingId, corruptedPlayerId, puppetPlayerId } = gameState;
+  const { players, chosenBlessingId, excludedBlessingId, corruptedPlayerId, puppetPlayerId, restlessSpirits } = gameState;
   const dracula = players.find(p => p.role === 'dracula');
   const brides = players.filter(p => p.role === 'bride');
   const huntersInPlay = players.filter(p => p.role === 'hunter');
   const goodPlayers = players.filter(p => p.role === 'guest' || p.role === 'hunter');
   const guests = players.filter(p => p.role === 'guest');
 
+  // Compute all adjacent seat pairs around the circle
+  const adjacentPairs = players.map((p, idx) => {
+    const nextP = players[(idx + 1) % players.length];
+    return {
+      seatA: p.seat,
+      seatB: nextP.seat,
+      label: `Between Seat ${p.seat} (${p.name}) & Seat ${nextP.seat} (${nextP.name})`,
+    };
+  });
+
   // Handle Dark Blessing in play selection
   const handleSelectBlessing = (bId: DarkBlessingId) => {
-    setGameState(prev => ({
-      ...prev,
-      chosenBlessingId: bId,
-      // If excluded matches chosen, reset excluded
-      excludedBlessingId: prev.excludedBlessingId === bId ? null : prev.excludedBlessingId,
-    }));
+    setGameState(prev => {
+      let nextSpirits = prev.restlessSpirits || [];
+      if (bId === 3 && nextSpirits.length < 2) {
+        const n = prev.players.length || 8;
+        nextSpirits = [
+          { betweenSeatA: 1, betweenSeatB: 2, alignment: 'evil' },
+          { betweenSeatA: Math.min(3, n), betweenSeatB: Math.min(4, n) > Math.min(3, n) ? Math.min(4, n) : 1, alignment: 'good' },
+        ];
+      }
+      return {
+        ...prev,
+        chosenBlessingId: bId,
+        // If excluded matches chosen, reset excluded
+        excludedBlessingId: prev.excludedBlessingId === bId ? null : prev.excludedBlessingId,
+        restlessSpirits: nextSpirits,
+      };
+    });
+  };
+
+  // Update a specific restless spirit
+  const handleUpdateSpirit = (index: number, updates: Partial<RestlessSpirit>) => {
+    setGameState(prev => {
+      const spirits = [...(prev.restlessSpirits || [])];
+      while (spirits.length <= index) {
+        spirits.push({ betweenSeatA: 1, betweenSeatB: 2, alignment: 'evil' });
+      }
+      spirits[index] = { ...spirits[index], ...updates };
+      return {
+        ...prev,
+        restlessSpirits: spirits,
+      };
+    });
   };
 
   // Handle Excluded Blessing selection
@@ -261,6 +298,125 @@ export const NightTab: React.FC<NightTabProps> = ({
                   {p.name} ({getPlayerColor(p.colorId).name})
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {chosenBlessingId === 3 && (
+          <div className="mt-3 p-3.5 rounded-xl bg-purple-950/30 border border-purple-800/80 space-y-4">
+            <div className="flex items-center gap-2">
+              <Ghost className="w-4 h-4 text-purple-400" />
+              <div>
+                <h4 className="text-xs font-serif font-bold text-purple-200">
+                  Dark Blessing #3: Restless Spirits Setup
+                </h4>
+                <p className="text-[11px] text-zinc-400">
+                  Dracula secretly points to 2 locations between players, showing thumbs up (Good / blue dot) or thumbs down (Evil / red dot) for each.
+                </p>
+              </div>
+            </div>
+
+            {/* Spirit 1 & Spirit 2 Placement Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[0, 1].map(sIdx => {
+                const spirit = (restlessSpirits && restlessSpirits[sIdx]) || {
+                  betweenSeatA: sIdx === 0 ? 1 : 2,
+                  betweenSeatB: sIdx === 0 ? 2 : 3,
+                  alignment: sIdx === 0 ? 'evil' : 'good',
+                };
+
+                return (
+                  <div
+                    key={sIdx}
+                    className={`p-3 rounded-xl border space-y-2.5 transition-all ${
+                      spirit.alignment === 'evil'
+                        ? 'bg-red-950/30 border-red-900/70 shadow-sm'
+                        : 'bg-blue-950/30 border-blue-900/70 shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                        <Ghost className={`w-3.5 h-3.5 ${spirit.alignment === 'evil' ? 'text-red-400' : 'text-blue-400'}`} />
+                        Restless Spirit #{sIdx + 1}
+                      </span>
+                      <span className={`text-[10px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
+                        spirit.alignment === 'evil'
+                          ? 'bg-red-900/60 border-red-700 text-red-200'
+                          : 'bg-blue-900/60 border-blue-700 text-blue-200'
+                      }`}>
+                        {spirit.alignment === 'evil' ? '🔴 Evil Dot' : '🔵 Good Dot'}
+                      </span>
+                    </div>
+
+                    {/* Adjacent Pair Dropdown */}
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
+                        Placed Between Players:
+                      </label>
+                      <select
+                        value={`${spirit.betweenSeatA}_${spirit.betweenSeatB}`}
+                        onChange={e => {
+                          const [a, b] = e.target.value.split('_').map(Number);
+                          handleUpdateSpirit(sIdx, { betweenSeatA: a, betweenSeatB: b });
+                        }}
+                        className="w-full bg-zinc-900/90 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-200 focus:outline-none focus:border-purple-500 font-medium"
+                      >
+                        {adjacentPairs.map(pair => (
+                          <option key={`${pair.seatA}_${pair.seatB}`} value={`${pair.seatA}_${pair.seatB}`}>
+                            {pair.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Alignment Toggle Buttons */}
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
+                        Registers As (Dracula's Signal):
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateSpirit(sIdx, { alignment: 'evil' })}
+                          className={`py-1.5 px-2 rounded-lg text-xs font-bold border flex items-center justify-center gap-1.5 transition-all ${
+                            spirit.alignment === 'evil'
+                              ? 'bg-red-900 text-white border-red-500 shadow-sm'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                          }`}
+                        >
+                          <span>🔴 Evil</span>
+                          <span className="text-[10px] text-zinc-300 font-normal">(Down)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateSpirit(sIdx, { alignment: 'good' })}
+                          className={`py-1.5 px-2 rounded-lg text-xs font-bold border flex items-center justify-center gap-1.5 transition-all ${
+                            spirit.alignment === 'good'
+                              ? 'bg-blue-900 text-white border-blue-500 shadow-sm'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                          }`}
+                        >
+                          <span>🔵 Good</span>
+                          <span className="text-[10px] text-zinc-300 font-normal">(Up)</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Live Table Preview */}
+            <div className="pt-2 border-t border-purple-900/40">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold text-purple-300">
+                  Live Seating Table (Spirits Placed):
+                </span>
+                <span className="text-[10px] text-zinc-400">
+                  Glowing orbs appear between seats
+                </span>
+              </div>
+              <SeatingChart players={players} restlessSpirits={restlessSpirits} />
             </div>
           </div>
         )}

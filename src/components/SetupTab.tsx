@@ -1,5 +1,5 @@
 import React from 'react';
-import { GameSettings, HunterType, Player, RoleType } from '../types/game';
+import { GameSettings, HunterType, Player, RoleType, RestlessSpirit } from '../types/game';
 import { GUEST_LIST_RULES, HUNTERS, OFFICIAL_COLORS } from '../data/gameData';
 import { SeatingChart } from './SeatingChart';
 import { Users, Shuffle, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
@@ -9,6 +9,7 @@ interface SetupTabProps {
   setSettings: React.Dispatch<React.SetStateAction<GameSettings>>;
   players: Player[];
   setPlayers: React.Dispatch<React.SetStateAction<Player[]>>;
+  restlessSpirits?: RestlessSpirit[];
   onStartNight: () => void;
 }
 
@@ -17,6 +18,7 @@ export const SetupTab: React.FC<SetupTabProps> = ({
   setSettings,
   players,
   setPlayers,
+  restlessSpirits,
   onStartNight,
 }) => {
   const currentRule = GUEST_LIST_RULES[settings.playerCount] || GUEST_LIST_RULES[8];
@@ -240,7 +242,7 @@ export const SetupTab: React.FC<SetupTabProps> = ({
       )}
 
       {/* 3. Seating Chart Visualization */}
-      <SeatingChart players={players} interactive />
+      <SeatingChart players={players} restlessSpirits={restlessSpirits} interactive />
 
       {/* 4. Player Roster & Role Assignment */}
       <div className="bg-[#10111d] rounded-2xl border border-rose-950/40 p-3 sm:p-4">

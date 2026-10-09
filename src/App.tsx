@@ -182,6 +182,7 @@ export function App() {
                 setGameState(prev => ({ ...prev, players: val }));
               }
             }}
+            restlessSpirits={gameState.chosenBlessingId === 3 ? gameState.restlessSpirits : undefined}
             onStartNight={handleStartNight}
           />
         )}

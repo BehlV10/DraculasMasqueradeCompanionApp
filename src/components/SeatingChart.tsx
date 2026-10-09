@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Player, RoleType } from '../types/game';
+import { Player, RoleType, RestlessSpirit } from '../types/game';
 import { getPlayerColor } from '../utils/gameLogic';
 import { HUNTERS } from '../data/gameData';
-import { Heart, LayoutGrid, CircleDot, ShieldAlert, Sparkles } from 'lucide-react';
+import { Heart, LayoutGrid, CircleDot, ShieldAlert, Sparkles, Ghost } from 'lucide-react';
 
 interface SeatingChartProps {
   players: Player[];
+  restlessSpirits?: RestlessSpirit[];
   onSelectPlayer?: (player: Player) => void;
   selectedPlayerId?: string | null;
   interactive?: boolean;
@@ -13,6 +14,7 @@ interface SeatingChartProps {
 
 export const SeatingChart: React.FC<SeatingChartProps> = ({
   players,
+  restlessSpirits = [],
   onSelectPlayer,
   selectedPlayerId,
   interactive = false,
@@ -65,6 +67,44 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
       return h ? h.name : 'Hunter';
     }
     return role;
+  };
+
+  const getSpiritCoordinates = (
+    spirit: RestlessSpirit,
+    spiritIndex: number,
+    allSpirits: RestlessSpirit[],
+    totalPlayers: number
+  ) => {
+    const { betweenSeatA, betweenSeatB } = spirit;
+    const minSeat = Math.min(betweenSeatA, betweenSeatB);
+    const maxSeat = Math.max(betweenSeatA, betweenSeatB);
+
+    let gapIndex: number;
+    if (minSeat === 1 && maxSeat === totalPlayers) {
+      gapIndex = totalPlayers - 0.5;
+    } else {
+      gapIndex = (minSeat - 1) + (maxSeat - minSeat) / 2;
+    }
+
+    let angle = (gapIndex / totalPlayers) * 2 * Math.PI - Math.PI / 2;
+
+    const spiritsInSameGap = allSpirits.filter(s => {
+      const sMin = Math.min(s.betweenSeatA, s.betweenSeatB);
+      const sMax = Math.max(s.betweenSeatA, s.betweenSeatB);
+      return sMin === minSeat && sMax === maxSeat;
+    });
+
+    let radius = 39;
+    if (spiritsInSameGap.length > 1) {
+      const idxInGap = spiritsInSameGap.indexOf(spirit);
+      radius = idxInGap === 0 ? 33 : 45;
+      angle += (idxInGap === 0 ? -0.06 : 0.06);
+    }
+
+    const x = 50 + radius * Math.cos(angle);
+    const y = 50 + radius * Math.sin(angle);
+
+    return { x, y };
   };
 
   const total = players.length;
@@ -123,7 +163,13 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
                 <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Good
               </span>
             </div>
-            <span className="text-[9px] text-zinc-500 italic mt-1">Clockwise ➔</span>
+            {restlessSpirits.length > 0 && (
+              <div className="mt-1 px-1.5 py-0.5 rounded-md bg-purple-950/80 border border-purple-800 text-[8px] sm:text-[9px] text-purple-200 flex items-center gap-1 font-medium">
+                <Ghost className="w-2.5 h-2.5 text-purple-400" />
+                <span>{restlessSpirits.length} Spirits</span>
+              </div>
+            )}
+            <span className="text-[9px] text-zinc-500 italic mt-0.5">Clockwise ➔</span>
           </div>
 
           {/* Player Seats positioned in circle */}
@@ -217,80 +263,162 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
               </div>
             );
           })}
+
+          {/* Restless Spirits placed between seats on circular table */}
+          {restlessSpirits.map((spirit, sIdx) => {
+            const { x, y } = getSpiritCoordinates(spirit, sIdx, restlessSpirits, total);
+            const isEvil = spirit.alignment === 'evil';
+
+            return (
+              <div
+                key={`spirit_${sIdx}_${spirit.betweenSeatA}_${spirit.betweenSeatB}`}
+                style={{
+                  left: `${x}%`,
+                  top: `${y}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+                title={`Restless Spirit #${sIdx + 1}: ${isEvil ? 'Evil' : 'Good'} (Between Seat ${spirit.betweenSeatA} & ${spirit.betweenSeatB})`}
+                className="absolute z-20 flex flex-col items-center pointer-events-auto select-none"
+              >
+                <div
+                  className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 flex items-center justify-center shadow-lg transition-transform hover:scale-125 cursor-help ${
+                    isEvil
+                      ? 'bg-gradient-to-br from-red-950 via-zinc-950 to-red-900 border-red-500 text-red-200 shadow-[0_0_12px_rgba(239,68,68,0.7)]'
+                      : 'bg-gradient-to-br from-blue-950 via-zinc-950 to-indigo-900 border-blue-400 text-blue-200 shadow-[0_0_12px_rgba(59,130,246,0.7)]'
+                  }`}
+                >
+                  <Ghost className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isEvil ? 'text-red-400' : 'text-blue-300'} animate-pulse`} />
+                  
+                  {/* Mini Dot Indicator */}
+                  <span
+                    className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-black ${
+                      isEvil ? 'bg-red-500' : 'bg-blue-400'
+                    }`}
+                  />
+                </div>
+
+                <div
+                  className={`mt-0.5 px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-bold font-mono tracking-tighter uppercase whitespace-nowrap border shadow-sm backdrop-blur-sm ${
+                    isEvil
+                      ? 'bg-black/90 text-red-300 border-red-900/80'
+                      : 'bg-black/90 text-blue-300 border-blue-900/80'
+                  }`}
+                >
+                  {isEvil ? '🔴 Evil' : '🔵 Good'}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* List View */}
       {viewMode === 'list' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[360px] overflow-y-auto pr-1">
-          {players.map(p => {
+          {players.map((p, pIdx) => {
             const pColor = getPlayerColor(p.colorId);
             const isSelected = selectedPlayerId === p.id;
+            const nextSeat = (p.seat % total) + 1;
+            const spiritsBetween = restlessSpirits.filter(
+              s => (s.betweenSeatA === p.seat && s.betweenSeatB === nextSeat) ||
+                   (s.betweenSeatB === p.seat && s.betweenSeatA === nextSeat)
+            );
 
             return (
-              <div
-                key={p.id}
-                onClick={() => onSelectPlayer && onSelectPlayer(p)}
-                className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
-                  isSelected
-                    ? 'bg-rose-950/40 border-rose-600'
-                    : 'bg-zinc-900/60 border-zinc-800/80 hover:bg-zinc-800/50'
-                } ${interactive ? 'cursor-pointer' : ''}`}
-              >
-                <div className="flex items-center gap-2.5">
-                  {/* Seat badge with player color */}
+              <React.Fragment key={p.id}>
+                <div
+                  onClick={() => onSelectPlayer && onSelectPlayer(p)}
+                  className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
+                    isSelected
+                      ? 'bg-rose-950/40 border-rose-600'
+                      : 'bg-zinc-900/60 border-zinc-800/80 hover:bg-zinc-800/50'
+                  } ${interactive ? 'cursor-pointer' : ''}`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    {/* Seat badge with player color */}
+                    <div
+                      style={{
+                        backgroundColor: pColor.hex,
+                        borderColor: pColor.borderHex || 'rgba(255,255,255,0.2)',
+                      }}
+                      className="w-7 h-7 rounded-lg border flex items-center justify-center font-mono font-bold text-xs shadow-sm"
+                    >
+                      <span style={{ color: pColor.textColor }}>{p.seat}</span>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-zinc-100">
+                          {p.name || `Player ${p.seat}`}
+                        </span>
+                        <span className="text-[10px] text-zinc-400">({pColor.name})</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[11px] text-zinc-300 font-medium">
+                          {getRoleLabel(p.role, p.hunterType)}
+                        </span>
+                        {p.isCorrupted && (
+                          <span className="text-[9px] bg-red-950 text-red-300 px-1 rounded border border-red-800">
+                            Corrupted
+                          </span>
+                        )}
+                        {p.isPuppet && (
+                          <span className="text-[9px] bg-purple-950 text-purple-300 px-1 rounded border border-purple-800">
+                            Puppet
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-0.5">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Heart
+                          key={i}
+                          className={`w-3 h-3 ${
+                            i < p.heartsRemaining
+                              ? 'fill-rose-500 text-rose-500'
+                              : 'fill-zinc-800 text-zinc-700'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <div>{getRoleBadge(p)}</div>
+                  </div>
+                </div>
+
+                {spiritsBetween.map((spirit, sIdx) => (
                   <div
-                    style={{
-                      backgroundColor: pColor.hex,
-                      borderColor: pColor.borderHex || 'rgba(255,255,255,0.2)',
-                    }}
-                    className="w-7 h-7 rounded-lg border flex items-center justify-center font-mono font-bold text-xs shadow-sm"
+                    key={`spirit_inline_${pIdx}_${sIdx}`}
+                    className={`sm:col-span-2 p-2 rounded-xl border flex items-center justify-between text-xs my-0.5 ${
+                      spirit.alignment === 'evil'
+                        ? 'bg-gradient-to-r from-red-950/40 via-zinc-950 to-red-950/20 border-red-800/60 text-red-200'
+                        : 'bg-gradient-to-r from-blue-950/40 via-zinc-950 to-blue-950/20 border-blue-800/60 text-blue-200'
+                    }`}
                   >
-                    <span style={{ color: pColor.textColor }}>{p.seat}</span>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-semibold text-zinc-100">
-                        {p.name || `Player ${p.seat}`}
-                      </span>
-                      <span className="text-[10px] text-zinc-400">({pColor.name})</span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-[11px] text-zinc-300 font-medium">
-                        {getRoleLabel(p.role, p.hunterType)}
-                      </span>
-                      {p.isCorrupted && (
-                        <span className="text-[9px] bg-red-950 text-red-300 px-1 rounded border border-red-800">
-                          Corrupted
+                    <div className="flex items-center gap-2">
+                      <Ghost className={`w-4 h-4 ${spirit.alignment === 'evil' ? 'text-red-400' : 'text-blue-400'} animate-pulse`} />
+                      <div>
+                        <span className="font-bold text-xs">
+                          Restless Spirit ({spirit.alignment === 'evil' ? '🔴 Evil Dot' : '🔵 Good Dot'})
                         </span>
-                      )}
-                      {p.isPuppet && (
-                        <span className="text-[9px] bg-purple-950 text-purple-300 px-1 rounded border border-purple-800">
-                          Puppet
+                        <span className="text-[10px] text-zinc-400 block">
+                          Positioned between Seat {spirit.betweenSeatA} and Seat {spirit.betweenSeatB}
                         </span>
-                      )}
+                      </div>
                     </div>
+                    <span className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded border ${
+                      spirit.alignment === 'evil'
+                        ? 'bg-red-950 border-red-700 text-red-300'
+                        : 'bg-blue-950 border-blue-700 text-blue-300'
+                    }`}>
+                      {spirit.alignment}
+                    </span>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-0.5">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <Heart
-                        key={i}
-                        className={`w-3 h-3 ${
-                          i < p.heartsRemaining
-                            ? 'fill-rose-500 text-rose-500'
-                            : 'fill-zinc-800 text-zinc-700'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <div>{getRoleBadge(p)}</div>
-                </div>
-              </div>
+                ))}
+              </React.Fragment>
             );
           })}
         </div>
