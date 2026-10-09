@@ -4,7 +4,7 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/DraculasMasqueradeCompanionApp/',
+  base: './',
   plugins: [react(), tailwindcss()],
   server: {
     host: true,
