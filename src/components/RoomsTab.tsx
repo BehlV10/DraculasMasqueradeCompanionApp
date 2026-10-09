@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   Ghost,
   CircleDot,
+  Sparkles,
 } from 'lucide-react';
 
 interface RoomsTabProps {
@@ -122,6 +123,12 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   };
 
   const handleToggleVote = (pId: string) => {
+    const player = players.find(p => p.id === pId);
+    if (player?.role === 'dracula' && gameState.chosenBlessingId === 2) {
+      alert("Under Puppet Strings (Dark Blessing #2), Dracula may only cast Pass votes!");
+      return;
+    }
+
     setVotes(prev => {
       const current = prev[pId] || 'pass';
       return {
@@ -168,6 +175,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   const participantPlayers = participantIds.map(id => players.find(p => p.id === id)!).filter(Boolean);
   const targetPlayerA = players.find(p => p.id === targetPlayerAId);
   const targetPlayerB = players.find(p => p.id === targetPlayerBId);
+  const draculaPlayer = players.find(p => p.role === 'dracula');
 
   const answerAnalysis = selectedQuestionId
     ? computeRoomAnswer(
@@ -325,6 +333,84 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
             </div>
           )}
         </div>
+
+        {/* Special Room Overrides (Blessing #5 Gathering Shadows & Hunter Dr. Seward) */}
+        {(gameState.chosenBlessingId === 5 || gameState.settings.selectedHunters.includes('dr_john_seward')) && (
+          <div className="bg-[#121320] rounded-xl p-3 border border-purple-900/50 mb-3 space-y-2.5">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span className="text-xs font-serif font-bold text-purple-200">
+                Special Room Overrides (Dark Blessing & Hunter Powers)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              {/* Gathering Shadows */}
+              {gameState.chosenBlessingId === 5 && (
+                <div className="p-2.5 rounded-xl bg-red-950/30 border border-red-900/60 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-red-300 flex items-center gap-1">
+                      <span>🌑 Gathering Shadows (Dracula):</span>
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {gameState.shadowRoomNumber ? `Auto-Fails Room #${gameState.shadowRoomNumber}` : 'Not designated'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] uppercase font-bold text-zinc-400">Target Room:</label>
+                    <select
+                      value={gameState.shadowRoomNumber || ''}
+                      onChange={e => {
+                        const val = e.target.value ? Number(e.target.value) : null;
+                        setGameState(prev => ({ ...prev, shadowRoomNumber: val }));
+                      }}
+                      className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 flex-1 font-mono focus:border-red-500"
+                    >
+                      <option value="">None (Decide later)</option>
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => (
+                        <option key={r} value={r}>
+                          Room #{r} (Will Auto-Fail)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Dr. John Seward */}
+              {gameState.settings.selectedHunters.includes('dr_john_seward') && (
+                <div className="p-2.5 rounded-xl bg-blue-950/30 border border-blue-900/60 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-blue-300 flex items-center gap-1">
+                      <span>💉 Dr. Seward's Tonic (Hunter):</span>
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {gameState.sewardRoomNumber ? `Auto-Passes Room #${gameState.sewardRoomNumber}` : 'Not designated'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] uppercase font-bold text-zinc-400">Target Room:</label>
+                    <select
+                      value={gameState.sewardRoomNumber || ''}
+                      onChange={e => {
+                        const val = e.target.value ? Number(e.target.value) : null;
+                        setGameState(prev => ({ ...prev, sewardRoomNumber: val }));
+                      }}
+                      className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 flex-1 font-mono focus:border-blue-500"
+                    >
+                      <option value="">None (Decide later)</option>
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => (
+                        <option key={r} value={r}>
+                          Room #{r} (Will Auto-Pass)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 1. ELEGANT CARD DISPLAY CONTAINER */}
         <div className="mb-4">
@@ -581,9 +667,24 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                           Evil
                         </span>
                       )}
+                      {p.isCorrupted && (
+                        <span className="ml-1 text-[9px] bg-red-950 text-red-300 px-1 py-0.2 rounded border border-red-800 animate-pulse">
+                          🩸 Corrupted (Registers Evil)
+                        </span>
+                      )}
                       {p.isPuppet && (
                         <span className="ml-1 text-[9px] bg-purple-950 text-purple-300 px-1 py-0.2 rounded border border-purple-800">
-                          Puppet Strings (Votes Fail)
+                          🎭 Puppet Strings (Secretly Fails)
+                        </span>
+                      )}
+                      {p.role === 'dracula' && gameState.chosenBlessingId === 2 && (
+                        <span className="ml-1 text-[9px] bg-blue-950 text-blue-300 px-1 py-0.2 rounded border border-blue-800">
+                          Must Pass (Puppet Strings)
+                        </span>
+                      )}
+                      {p.role === 'dracula' && gameState.chosenBlessingId === 4 && vote === 'fail' && (
+                        <span className="ml-1 text-[9px] bg-amber-950 text-amber-300 px-1 py-0.2 rounded border border-amber-800 animate-pulse">
+                          ⚡ Echoing Curse (Treated as Pass)
                         </span>
                       )}
                     </div>
@@ -635,6 +736,26 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 <span className="text-sm font-bold">
                   {finalOutcome === 'pass' ? 'ROOM PASSED (Give True Answer)' : 'ROOM FAILED (Give False Answer)'}
                 </span>
+                {isSewardForcedPass && (
+                  <span className="text-[11px] text-emerald-300 block font-medium mt-0.5">
+                    💉 Dr. Seward's Tonic Triggered: Room #{currentRoomNumber} automatically Passes regardless of votes!
+                  </span>
+                )}
+                {isShadowForcedFail && (
+                  <span className="text-[11px] text-rose-300 block font-medium mt-0.5">
+                    🌑 Gathering Shadows Triggered: Room #{currentRoomNumber} automatically Fails by Dracula's decree!
+                  </span>
+                )}
+                {isEchoingCurseFail && (
+                  <span className="text-[11px] text-rose-300 block font-medium mt-0.5">
+                    ⚡ Echoing Curse Triggered: Room #{currentRoomNumber} automatically Fails because Dracula voted Fail in Room #{currentRoomNumber - 1}!
+                  </span>
+                )}
+                {draculaPlayer && rawVotes[draculaPlayer.id] === 'fail' && gameState.chosenBlessingId === 4 && (
+                  <span className="text-[11px] text-amber-300 block font-medium mt-0.5 animate-pulse">
+                    ⚡ Echoing Curse Activated: Dracula voted Fail! Room #{currentRoomNumber + 1} will automatically Fail!
+                  </span>
+                )}
               </div>
             </div>
 

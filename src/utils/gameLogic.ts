@@ -974,7 +974,7 @@ export function computeRoomAnswer(
       const hadMultiEvil = roomsHistory.some(r => {
         const evils = r.participantPlayerIds.filter(id => {
           const p = players.find(pl => pl.id === id);
-          return p && isEvilRole(p.role);
+          return p && getPlayerRegisteredTeam(p) === 'evil';
         });
         return evils.length > 1;
       });

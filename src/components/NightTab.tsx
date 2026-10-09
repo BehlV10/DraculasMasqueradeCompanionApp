@@ -44,14 +44,34 @@ export const NightTab: React.FC<NightTabProps> = ({
           { betweenSeatA: Math.min(3, n), betweenSeatB: Math.min(4, n) > Math.min(3, n) ? Math.min(4, n) : 1, alignment: 'good' },
         ];
       }
+
+      // Clean up previous blessing artifacts when switching blessings
+      const cleanedPlayers = prev.players.map(p => ({
+        ...p,
+        isCorrupted: bId === 1 ? p.isCorrupted : false,
+        isPuppet: bId === 2 ? p.isPuppet : false,
+      }));
+
       return {
         ...prev,
         chosenBlessingId: bId,
         // If excluded matches chosen, reset excluded
         excludedBlessingId: prev.excludedBlessingId === bId ? null : prev.excludedBlessingId,
-        restlessSpirits: nextSpirits,
+        corruptedPlayerId: bId === 1 ? prev.corruptedPlayerId : null,
+        puppetPlayerId: bId === 2 ? prev.puppetPlayerId : null,
+        shadowRoomNumber: bId === 5 ? prev.shadowRoomNumber : null,
+        players: cleanedPlayers,
+        restlessSpirits: bId === 3 ? nextSpirits : prev.restlessSpirits,
       };
     });
+  };
+
+  // Handle Gathering Shadows auto-fail room designation
+  const handleSetShadowRoom = (roomNum: number | null) => {
+    setGameState(prev => ({
+      ...prev,
+      shadowRoomNumber: roomNum,
+    }));
   };
 
   // Update a specific restless spirit
@@ -418,6 +438,73 @@ export const NightTab: React.FC<NightTabProps> = ({
               </div>
               <SeatingChart players={players} restlessSpirits={restlessSpirits} />
             </div>
+          </div>
+        )}
+
+        {chosenBlessingId === 4 && (
+          <div className="mt-3 p-3 rounded-xl bg-purple-950/30 border border-purple-800 space-y-2">
+            <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Dark Blessing #4: Echoing Curse (Passive Power)
+            </span>
+            <p className="text-[11px] text-zinc-300 leading-relaxed">
+              No night setup required. Whenever Dracula votes Fail during exploration, the app will automatically treat his vote as a Pass in his current room, and force the subsequent room to automatically Fail!
+            </p>
+          </div>
+        )}
+
+        {chosenBlessingId === 5 && (
+          <div className="mt-3 p-3.5 rounded-xl bg-purple-950/30 border border-purple-800 space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <div>
+                <h4 className="text-xs font-serif font-bold text-purple-200">
+                  Dark Blessing #5: Gathering Shadows Setup
+                </h4>
+                <p className="text-[11px] text-zinc-400">
+                  Dracula may designate one room number that will automatically Fail regardless of votes cast.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1.5">
+                Designated Auto-Fail Room:
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleSetShadowRoom(null)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                    gameState.shadowRoomNumber === null
+                      ? 'bg-purple-900 text-white border-purple-500 shadow-sm'
+                      : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                  }`}
+                >
+                  Decide Later During Game
+                </button>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(roomNum => (
+                  <button
+                    key={roomNum}
+                    type="button"
+                    onClick={() => handleSetShadowRoom(roomNum)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                      gameState.shadowRoomNumber === roomNum
+                        ? 'bg-red-900 text-white border-red-500 shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                    }`}
+                  >
+                    Room #{roomNum}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {gameState.shadowRoomNumber !== null && (
+              <div className="p-2 rounded-lg bg-red-950/40 border border-red-800/60 text-xs text-red-200">
+                🌑 Room #{gameState.shadowRoomNumber} is designated! When players reach Room #{gameState.shadowRoomNumber}, the app will automatically calculate the outcome as Fail.
+              </div>
+            )}
           </div>
         )}
       </div>
