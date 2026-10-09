@@ -469,7 +469,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 onClick={() => setIsCardPickerOpen(true)}
                 className="text-xs text-rose-400 font-semibold hover:underline"
               >
-                Browse all 53 cards ➔
+                Browse all {ROOM_CARDS.length} cards ➔
               </button>
 
               <button

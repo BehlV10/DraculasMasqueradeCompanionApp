@@ -86,7 +86,7 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
       gapIndex = (minSeat - 1) + (maxSeat - minSeat) / 2;
     }
 
-    let angle = (gapIndex / totalPlayers) * 2 * Math.PI - Math.PI / 2;
+    let angle = (gapIndex / totalPlayers) * 2 * Math.PI + Math.PI / 2;
 
     const spiritsInSameGap = allSpirits.filter(s => {
       const sMin = Math.min(s.betweenSeatA, s.betweenSeatB);
@@ -94,10 +94,10 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
       return sMin === minSeat && sMax === maxSeat;
     });
 
-    let radius = 39;
+    let radius = 38;
     if (spiritsInSameGap.length > 1) {
       const idxInGap = spiritsInSameGap.indexOf(spirit);
-      radius = idxInGap === 0 ? 33 : 45;
+      radius = idxInGap === 0 ? 32 : 44;
       angle += (idxInGap === 0 ? -0.06 : 0.06);
     }
 
@@ -172,11 +172,11 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
             <span className="text-[9px] text-zinc-500 italic mt-0.5">Clockwise ➔</span>
           </div>
 
-          {/* Player Seats positioned in circle */}
+          {/* Player Seats positioned in circle (Seat 1 at bottom, progressing clockwise) */}
           {players.map((p, index) => {
-            const angle = (index / total) * 2 * Math.PI - Math.PI / 2; // start from top
+            const angle = (index / total) * 2 * Math.PI + Math.PI / 2; // start from bottom (6 o'clock)
             // Calculate coordinates (percentage radius around center: ~38%)
-            const radius = 39;
+            const radius = 38;
             const x = 50 + radius * Math.cos(angle);
             const y = 50 + radius * Math.sin(angle);
             const pColor = getPlayerColor(p.colorId);

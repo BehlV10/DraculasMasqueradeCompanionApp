@@ -185,7 +185,7 @@ export const ReferenceTab: React.FC = () => {
           <div className="flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-rose-400" />
             <span className="text-xs sm:text-sm font-bold text-rose-200">
-              Complete Room Card Library (53 Cards)
+              Complete Room Card Library ({ROOM_CARDS.length} Cards)
             </span>
           </div>
           {openSection === 'roomdeck' ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
@@ -196,7 +196,7 @@ export const ReferenceTab: React.FC = () => {
             {/* Solo Rooms */}
             <div className="space-y-1.5">
               <span className="text-xs font-bold text-rose-400 uppercase font-mono block">
-                ❤️ Solo Rooms (1 Heart — 20 Cards)
+                ❤️ Solo Rooms (1 Heart — {ROOM_CARDS.filter(c => c.hearts === 1).length} Cards)
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {ROOM_CARDS.filter(c => c.hearts === 1).map(c => (
@@ -211,7 +211,7 @@ export const ReferenceTab: React.FC = () => {
             {/* 2-Player Rooms */}
             <div className="space-y-1.5 pt-2 border-t border-zinc-800/60">
               <span className="text-xs font-bold text-rose-400 uppercase font-mono block">
-                ❤️❤️ 2-Player Rooms (2 Hearts — 23 Cards)
+                ❤️❤️ 2-Player Rooms (2 Hearts — {ROOM_CARDS.filter(c => c.hearts === 2).length} Cards)
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {ROOM_CARDS.filter(c => c.hearts === 2).map(c => (
@@ -226,7 +226,7 @@ export const ReferenceTab: React.FC = () => {
             {/* 3-Player Rooms */}
             <div className="space-y-1.5 pt-2 border-t border-zinc-800/60">
               <span className="text-xs font-bold text-rose-400 uppercase font-mono block">
-                ❤️❤️❤️ 3-Player Rooms (3 Hearts — 10 Cards)
+                ❤️❤️❤️ 3-Player Rooms (3 Hearts — {ROOM_CARDS.filter(c => c.hearts === 3).length} Cards)
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {ROOM_CARDS.filter(c => c.hearts === 3).map(c => (
