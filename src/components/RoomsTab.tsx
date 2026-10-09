@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { GameState, Player, RoomHeartCount, RoomLogEntry, RoomCardDefinition } from '../types/game';
-import { ROOM_CARDS } from '../data/gameData';
+import { GameState, Player, RoomHeartCount, RoomLogEntry, RoomCardDefinition, RoomCardCategory } from '../types/game';
+import { ROOM_CARDS, ROOM_CATEGORIES } from '../data/gameData';
 import { computeRoomAnswer, getPlayerColor, isEvilRole } from '../utils/gameLogic';
 import { playFailSound, playPassSound } from '../utils/sound';
 import { TimerWidget } from './TimerWidget';
@@ -23,6 +23,7 @@ import {
   Ghost,
   CircleDot,
   Sparkles,
+  Tag,
 } from 'lucide-react';
 
 interface RoomsTabProps {
@@ -56,10 +57,48 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   // Table view toggle state
   const [showSeatingTable, setShowSeatingTable] = useState<boolean>(false);
 
-  // Card Picker Sheet State
+  // Card Picker Sheet & Category Route State
   const [isCardPickerOpen, setIsCardPickerOpen] = useState<boolean>(false);
   const [questionSearch, setQuestionSearch] = useState<string>('');
   const [cardHeartFilter, setCardHeartFilter] = useState<'all' | 1 | 2 | 3>('all');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | RoomCardCategory>('all');
+  const [modalCategoryFilter, setModalCategoryFilter] = useState<'all' | RoomCardCategory>('all');
+
+  // Cards available for current room hearts
+  const cardsForCurrentHearts = useMemo(() => {
+    return ROOM_CARDS.filter(c => c.hearts === hearts);
+  }, [hearts]);
+
+  // Categories available for current room hearts
+  const availableCategoriesForHearts = useMemo(() => {
+    return ROOM_CATEGORIES.filter(cat =>
+      cardsForCurrentHearts.some(c => c.category === cat.id)
+    );
+  }, [cardsForCurrentHearts]);
+
+  // Questions available given selected hearts & selected category
+  const availableQuestionsForCategory = useMemo(() => {
+    if (selectedCategory === 'all') return cardsForCurrentHearts;
+    const filtered = cardsForCurrentHearts.filter(c => c.category === selectedCategory);
+    return filtered.length > 0 ? filtered : cardsForCurrentHearts;
+  }, [cardsForCurrentHearts, selectedCategory]);
+
+  const handleSelectCategory = (catId: 'all' | RoomCardCategory) => {
+    setSelectedCategory(catId);
+    if (catId !== 'all') {
+      const match = cardsForCurrentHearts.find(c => c.category === catId);
+      if (match && (!selectedQuestionId || ROOM_CARDS.find(c => c.id === selectedQuestionId)?.category !== catId)) {
+        setSelectedQuestionId(match.id);
+      }
+    }
+  };
+
+  // Open modal pre-synced to current room hearts and category
+  const handleOpenPickerModal = () => {
+    setCardHeartFilter(hearts);
+    setModalCategoryFilter(selectedCategory);
+    setIsCardPickerOpen(true);
+  };
 
   // When hearts count changes, ensure participantIds count matches
   const handleHeartsChange = (newHearts: RoomHeartCount) => {
@@ -72,6 +111,23 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
       }
     }
     setParticipantIds(newParticipants);
+
+    // If currently selected category has no cards for new heart tier, reset to 'all'
+    const newHeartsCards = ROOM_CARDS.filter(c => c.hearts === newHearts);
+    let nextCategory = selectedCategory;
+    if (selectedCategory !== 'all' && !newHeartsCards.some(c => c.category === selectedCategory)) {
+      nextCategory = 'all';
+      setSelectedCategory('all');
+    }
+
+    // Ensure selected question matches new hearts
+    const currentQ = ROOM_CARDS.find(c => c.id === selectedQuestionId);
+    if (!currentQ || currentQ.hearts !== newHearts) {
+      const validFirst = nextCategory !== 'all'
+        ? newHeartsCards.find(c => c.category === nextCategory) || newHeartsCards[0]
+        : newHeartsCards[0];
+      if (validFirst) setSelectedQuestionId(validFirst.id);
+    }
   };
 
   // When a question is selected from the picker
@@ -80,21 +136,22 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
     if (card.hearts !== hearts) {
       handleHeartsChange(card.hearts);
     }
+    setSelectedCategory(card.category);
     setIsCardPickerOpen(false);
   };
 
-  // Cycle to previous / next card in the same heart count
+  // Cycle to previous / next card in the active category pool
   const handleCycleCard = (direction: 'prev' | 'next') => {
-    const currentCards = ROOM_CARDS.filter(c => c.hearts === hearts);
-    const currentIndex = currentCards.findIndex(c => c.id === selectedQuestionId);
+    const pool = availableQuestionsForCategory;
+    const currentIndex = pool.findIndex(c => c.id === selectedQuestionId);
     if (currentIndex === -1) {
-      if (currentCards.length > 0) setSelectedQuestionId(currentCards[0].id);
+      if (pool.length > 0) setSelectedQuestionId(pool[0].id);
       return;
     }
     let nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
-    if (nextIndex >= currentCards.length) nextIndex = 0;
-    if (nextIndex < 0) nextIndex = currentCards.length - 1;
-    setSelectedQuestionId(currentCards[nextIndex].id);
+    if (nextIndex >= pool.length) nextIndex = 0;
+    if (nextIndex < 0) nextIndex = pool.length - 1;
+    setSelectedQuestionId(pool[nextIndex].id);
   };
 
   const handleLeaderChange = (newLeaderId: string) => {
@@ -189,11 +246,23 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
       )
     : null;
 
-  // Real-time keyword & heart search logic
+  const activeCategoryConfig = ROOM_CATEGORIES.find(c => c.id === selectedQuestion.category);
+
+  // Cards matching the current heart filter in modal (to calculate dynamic category counts)
+  const cardsMatchingHeartFilter = useMemo(() => {
+    if (cardHeartFilter === 'all') return ROOM_CARDS;
+    return ROOM_CARDS.filter(c => c.hearts === cardHeartFilter);
+  }, [cardHeartFilter]);
+
+  // Real-time keyword, heart & category search logic for modal
   const filteredCards = useMemo(() => {
     return ROOM_CARDS.filter(card => {
       // Heart count filter
       if (cardHeartFilter !== 'all' && card.hearts !== cardHeartFilter) {
+        return false;
+      }
+      // Category filter in modal
+      if (modalCategoryFilter !== 'all' && card.category !== modalCategoryFilter) {
         return false;
       }
       // Keyword search
@@ -206,7 +275,15 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
       }
       return true;
     });
-  }, [cardHeartFilter, questionSearch]);
+  }, [cardHeartFilter, modalCategoryFilter, questionSearch]);
+
+  // Grouped cards for the modal when browsing all categories without a search query
+  const modalCategoryGroups = useMemo(() => {
+    return ROOM_CATEGORIES.map(cat => ({
+      cat,
+      cards: filteredCards.filter(c => c.category === cat.id),
+    })).filter(g => g.cards.length > 0);
+  }, [filteredCards]);
 
   const soloCount = ROOM_CARDS.filter(q => q.hearts === 1).length;
   const twoHeartsCount = ROOM_CARDS.filter(q => q.hearts === 2).length;
@@ -259,6 +336,67 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
     setVotes({});
     setAnswerGiven('');
+  };
+
+  const renderCardItem = (card: RoomCardDefinition) => {
+    const isCurrent = selectedQuestionId === card.id;
+    const catConfig = ROOM_CATEGORIES.find(c => c.id === card.category);
+
+    return (
+      <div
+        key={card.id}
+        onClick={() => handleSelectQuestion(card)}
+        className={`p-3 rounded-xl border cursor-pointer transition-all active:scale-[0.99] ${
+          isCurrent
+            ? 'bg-rose-950/80 border-rose-500 shadow-md ring-1 ring-rose-500/40'
+            : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/60'
+        }`}
+      >
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-0.5">
+              {Array.from({ length: card.hearts }).map((_, i) => (
+                <Heart key={i} className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+              ))}
+            </div>
+            <span className="text-[11px] font-mono font-bold text-zinc-300">
+              {card.hearts === 1 ? 'Solo (1♥)' : `${card.hearts} Players (${card.hearts}♥)`}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {catConfig ? (
+              <span className={`text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${catConfig.badgeClass}`}>
+                <span>{catConfig.emoji}</span>
+                <span>{catConfig.shortName}</span>
+              </span>
+            ) : (
+              <span className="text-[10px] font-mono uppercase bg-zinc-950 text-zinc-400 px-2 py-0.5 rounded border border-zinc-800">
+                {card.category}
+              </span>
+            )}
+            {isCurrent && (
+              <CheckCircle2 className="w-4 h-4 text-rose-400" />
+            )}
+          </div>
+        </div>
+
+        <p className="text-xs sm:text-sm font-semibold text-zinc-100 leading-snug">
+          {card.question}
+        </p>
+
+        {card.options && (
+          <div className="flex flex-wrap gap-1 mt-2 text-[10px] text-zinc-400">
+            <span className="text-zinc-500">Possible:</span>
+            {card.options.slice(0, 5).map((opt, i) => (
+              <span key={i} className="bg-black/60 px-1.5 py-0.2 rounded border border-zinc-800 text-zinc-300">
+                {opt}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -422,17 +560,54 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
             {/* Change Card Button */}
             <button
-              onClick={() => setIsCardPickerOpen(true)}
+              onClick={handleOpenPickerModal}
               className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-800 text-rose-200 text-xs font-bold transition-all shadow-sm"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>Change Card</span>
+              <span>Full Library</span>
             </button>
+          </div>
+
+          {/* Quick Topic / Category Filter Chips for current Heart tier */}
+          <div className="flex items-center gap-1.5 overflow-x-auto py-1 mb-2 scrollbar-none">
+            <span className="text-[10px] uppercase font-bold text-zinc-500 font-mono shrink-0 flex items-center gap-1 mr-0.5">
+              <Tag className="w-3 h-3 text-rose-400" />
+              Topic:
+            </span>
+            <button
+              onClick={() => handleSelectCategory('all')}
+              className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                selectedCategory === 'all'
+                  ? 'bg-zinc-200 text-black shadow-sm'
+                  : 'bg-zinc-900/90 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+              }`}
+            >
+              All ({cardsForCurrentHearts.length})
+            </button>
+            {availableCategoriesForHearts.map(cat => {
+              const count = cardsForCurrentHearts.filter(c => c.category === cat.id).length;
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => handleSelectCategory(cat.id)}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                    isSelected
+                      ? cat.activeChipClass
+                      : 'bg-zinc-900/90 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  }`}
+                >
+                  <span>{cat.emoji}</span>
+                  <span>{cat.shortName}</span>
+                  <span className="text-[10px] opacity-75 font-mono">({count})</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* The Physical Card Replica */}
           <div className="rounded-2xl bg-gradient-to-br from-[#161726] to-[#0f101b] border-2 border-rose-900/70 p-3.5 sm:p-4 shadow-lg shadow-black/40 relative overflow-hidden">
-            {/* Card Top: Hearts & Category */}
+            {/* Card Top: Hearts & Category Badge */}
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1 bg-rose-950/80 border border-rose-800/80 px-2 py-0.5 rounded-full">
                 <div className="flex items-center gap-0.5">
@@ -445,15 +620,42 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 </span>
               </div>
 
-              <span className="text-[10px] font-mono uppercase font-bold text-zinc-400 bg-zinc-900/80 px-2 py-0.5 rounded-full border border-zinc-800">
-                {selectedQuestion.category}
-              </span>
+              {activeCategoryConfig ? (
+                <span className={`text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${activeCategoryConfig.badgeClass}`}>
+                  <span>{activeCategoryConfig.emoji}</span>
+                  <span>{activeCategoryConfig.name}</span>
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono uppercase font-bold text-zinc-400 bg-zinc-900/80 px-2 py-0.5 rounded-full border border-zinc-800">
+                  {selectedQuestion.category}
+                </span>
+              )}
             </div>
 
             {/* Question Text */}
             <p className="font-serif text-sm sm:text-base font-bold text-rose-50 leading-snug my-2">
               "{selectedQuestion.question}"
             </p>
+
+            {/* Direct Question Dropdown for selected Category */}
+            <div className="mt-2 pt-2 border-t border-zinc-800/60">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono uppercase font-bold text-zinc-400 shrink-0">
+                  Select Question:
+                </span>
+                <select
+                  value={selectedQuestionId}
+                  onChange={e => setSelectedQuestionId(e.target.value)}
+                  className="flex-1 min-w-0 bg-zinc-900/90 border border-zinc-700/80 hover:border-rose-600/70 rounded-lg px-2 py-1 text-xs text-zinc-100 font-medium truncate focus:outline-none focus:border-rose-500 transition-colors"
+                >
+                  {availableQuestionsForCategory.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.question}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
             {/* Quick Cycle Controls: Previous / Next Card */}
             <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 mt-2">
@@ -466,7 +668,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
               </button>
 
               <button
-                onClick={() => setIsCardPickerOpen(true)}
+                onClick={handleOpenPickerModal}
                 className="text-xs text-rose-400 font-semibold hover:underline"
               >
                 Browse all {ROOM_CARDS.length} cards ➔
@@ -973,6 +1175,44 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 </button>
               </div>
 
+              {/* Category / Topic Filter Chips in Modal */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                <span className="text-[10px] uppercase font-bold text-zinc-500 font-mono shrink-0 flex items-center gap-1">
+                  <Tag className="w-3 h-3 text-rose-400" />
+                  Topic:
+                </span>
+                <button
+                  onClick={() => setModalCategoryFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                    modalCategoryFilter === 'all'
+                      ? 'bg-zinc-200 text-black shadow-sm'
+                      : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  }`}
+                >
+                  All Topics ({cardsMatchingHeartFilter.length})
+                </button>
+                {ROOM_CATEGORIES.map(cat => {
+                  const count = cardsMatchingHeartFilter.filter(c => c.category === cat.id).length;
+                  if (count === 0 && cardHeartFilter !== 'all') return null;
+                  const isSelected = modalCategoryFilter === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setModalCategoryFilter(cat.id)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                        isSelected
+                          ? cat.activeChipClass
+                          : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                      }`}
+                    >
+                      <span>{cat.emoji}</span>
+                      <span>{cat.shortName}</span>
+                      <span className="text-[10px] opacity-75 font-mono">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Search result count */}
               <div className="flex items-center justify-between text-[10px] text-zinc-400 px-0.5">
                 <span>Showing {filteredCards.length} cards</span>
@@ -983,64 +1223,33 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
             </div>
 
             {/* Scrollable Card List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
               {filteredCards.length === 0 ? (
                 <div className="text-center py-12 text-zinc-500 text-xs">
-                  No cards matched "{questionSearch}". Try another search keyword!
+                  No cards matched your filter. Try another search keyword or topic!
                 </div>
-              ) : (
-                filteredCards.map(card => {
-                  const isCurrent = selectedQuestionId === card.id;
-
-                  return (
-                    <div
-                      key={card.id}
-                      onClick={() => handleSelectQuestion(card)}
-                      className={`p-3 rounded-xl border cursor-pointer transition-all active:scale-[0.99] ${
-                        isCurrent
-                          ? 'bg-rose-950/80 border-rose-500 shadow-md ring-1 ring-rose-500/40'
-                          : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex items-center gap-0.5">
-                            {Array.from({ length: card.hearts }).map((_, i) => (
-                              <Heart key={i} className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-                            ))}
-                          </div>
-                          <span className="text-[11px] font-mono font-bold text-zinc-300">
-                            {card.hearts === 1 ? 'Solo (1♥)' : `${card.hearts} Players (${card.hearts}♥)`}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-mono uppercase bg-zinc-950 text-zinc-400 px-2 py-0.5 rounded border border-zinc-800">
-                            {card.category}
-                          </span>
-                          {isCurrent && (
-                            <CheckCircle2 className="w-4 h-4 text-rose-400" />
-                          )}
-                        </div>
+              ) : modalCategoryFilter === 'all' && !questionSearch.trim() ? (
+                /* Grouped by Category when browsing All Topics */
+                modalCategoryGroups.map(group => (
+                  <div key={group.cat.id} className="space-y-1.5 pt-2 first:pt-0">
+                    <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl border bg-zinc-900/90 border-zinc-800 sticky top-0 z-10 backdrop-blur-md">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">{group.cat.emoji}</span>
+                        <span className="text-xs font-bold text-zinc-200">{group.cat.name}</span>
+                        <span className="text-[10px] font-mono text-zinc-400">({group.cards.length} cards)</span>
                       </div>
-
-                      <p className="text-xs sm:text-sm font-semibold text-zinc-100 leading-snug">
-                        {card.question}
-                      </p>
-
-                      {card.options && (
-                        <div className="flex flex-wrap gap-1 mt-2 text-[10px] text-zinc-400">
-                          <span className="text-zinc-500">Possible:</span>
-                          {card.options.slice(0, 5).map((opt, i) => (
-                            <span key={i} className="bg-black/60 px-1.5 py-0.2 rounded border border-zinc-800 text-zinc-300">
-                              {opt}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <span className="text-[10px] text-zinc-500 font-mono hidden sm:inline">
+                        {group.cat.description}
+                      </span>
                     </div>
-                  );
-                })
+                    <div className="space-y-1.5">
+                      {group.cards.map(card => renderCardItem(card))}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                /* Flat filtered list when specific Category or Search is active */
+                filteredCards.map(card => renderCardItem(card))
               )}
             </div>
           </div>

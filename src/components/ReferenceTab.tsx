@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DARK_BLESSINGS, GUEST_LIST_RULES, HUNTERS, ROOM_CARDS } from '../data/gameData';
+import { DARK_BLESSINGS, GUEST_LIST_RULES, HUNTERS, ROOM_CARDS, ROOM_CATEGORIES } from '../data/gameData';
 import { BookOpen, Sparkles, Shield, Clock, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 export const ReferenceTab: React.FC = () => {
@@ -199,12 +199,17 @@ export const ReferenceTab: React.FC = () => {
                 ❤️ Solo Rooms (1 Heart — {ROOM_CARDS.filter(c => c.hearts === 1).length} Cards)
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {ROOM_CARDS.filter(c => c.hearts === 1).map(c => (
-                  <div key={c.id} className="p-2 rounded-lg bg-zinc-950 border border-zinc-800">
-                    <span className="text-[10px] text-zinc-500 font-mono uppercase block">{c.category}</span>
-                    <p className="text-zinc-200 font-medium">{c.question}</p>
-                  </div>
-                ))}
+                {ROOM_CARDS.filter(c => c.hearts === 1).map(c => {
+                  const cat = ROOM_CATEGORIES.find(k => k.id === c.category);
+                  return (
+                    <div key={c.id} className="p-2 rounded-lg bg-zinc-950 border border-zinc-800">
+                      <span className={`text-[10px] font-mono uppercase px-1.5 py-0.2 rounded border inline-flex items-center gap-1 mb-1 ${cat?.badgeClass || 'text-zinc-500'}`}>
+                        {cat?.emoji} {cat?.shortName || c.category}
+                      </span>
+                      <p className="text-zinc-200 font-medium">{c.question}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -214,12 +219,17 @@ export const ReferenceTab: React.FC = () => {
                 ❤️❤️ 2-Player Rooms (2 Hearts — {ROOM_CARDS.filter(c => c.hearts === 2).length} Cards)
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {ROOM_CARDS.filter(c => c.hearts === 2).map(c => (
-                  <div key={c.id} className="p-2 rounded-lg bg-zinc-950 border border-zinc-800">
-                    <span className="text-[10px] text-zinc-500 font-mono uppercase block">{c.category}</span>
-                    <p className="text-zinc-200 font-medium">{c.question}</p>
-                  </div>
-                ))}
+                {ROOM_CARDS.filter(c => c.hearts === 2).map(c => {
+                  const cat = ROOM_CATEGORIES.find(k => k.id === c.category);
+                  return (
+                    <div key={c.id} className="p-2 rounded-lg bg-zinc-950 border border-zinc-800">
+                      <span className={`text-[10px] font-mono uppercase px-1.5 py-0.2 rounded border inline-flex items-center gap-1 mb-1 ${cat?.badgeClass || 'text-zinc-500'}`}>
+                        {cat?.emoji} {cat?.shortName || c.category}
+                      </span>
+                      <p className="text-zinc-200 font-medium">{c.question}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -229,12 +239,17 @@ export const ReferenceTab: React.FC = () => {
                 ❤️❤️❤️ 3-Player Rooms (3 Hearts — {ROOM_CARDS.filter(c => c.hearts === 3).length} Cards)
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {ROOM_CARDS.filter(c => c.hearts === 3).map(c => (
-                  <div key={c.id} className="p-2 rounded-lg bg-zinc-950 border border-zinc-800">
-                    <span className="text-[10px] text-zinc-500 font-mono uppercase block">{c.category}</span>
-                    <p className="text-zinc-200 font-medium">{c.question}</p>
-                  </div>
-                ))}
+                {ROOM_CARDS.filter(c => c.hearts === 3).map(c => {
+                  const cat = ROOM_CATEGORIES.find(k => k.id === c.category);
+                  return (
+                    <div key={c.id} className="p-2 rounded-lg bg-zinc-950 border border-zinc-800">
+                      <span className={`text-[10px] font-mono uppercase px-1.5 py-0.2 rounded border inline-flex items-center gap-1 mb-1 ${cat?.badgeClass || 'text-zinc-500'}`}>
+                        {cat?.emoji} {cat?.shortName || c.category}
+                      </span>
+                      <p className="text-zinc-200 font-medium">{c.question}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

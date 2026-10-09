@@ -47,11 +47,13 @@ export interface Player {
 
 export type RoomHeartCount = 1 | 2 | 3;
 
+export type RoomCardCategory = 'identity' | 'adjacency' | 'history' | 'blessing' | 'counts';
+
 export interface RoomCardDefinition {
   id: string;
   hearts: RoomHeartCount;
   question: string;
-  category: 'identity' | 'adjacency' | 'history' | 'blessing' | 'counts';
+  category: RoomCardCategory;
   notes?: string;
   options?: string[]; // predefined answers if any
 }

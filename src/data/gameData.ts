@@ -1,4 +1,4 @@
-import { DarkBlessing, HunterInfo, PlayerColor, RoomCardDefinition } from '../types/game';
+import { DarkBlessing, HunterInfo, PlayerColor, RoomCardCategory, RoomCardDefinition } from '../types/game';
 
 export const OFFICIAL_COLORS: PlayerColor[] = [
   { id: 'red', name: 'Red', hex: '#dc2626', textColor: '#ffffff' },
@@ -115,6 +115,70 @@ export const HUNTERS: HunterInfo[] = [
     initials: 'JS',
     description: 'Choose a room number. That room will Pass regardless of the votes cast. You may use this at anytime during the game.',
     nightInstruction: 'Remind Dr. Seward that he can declare a room number during the game to force it to Pass.',
+  },
+];
+
+export interface CategoryConfig {
+  id: RoomCardCategory;
+  name: string;
+  shortName: string;
+  emoji: string;
+  description: string;
+  badgeClass: string;
+  activeChipClass: string;
+  dotColor: string;
+}
+
+export const ROOM_CATEGORIES: CategoryConfig[] = [
+  {
+    id: 'identity',
+    name: 'Identity & Roles',
+    shortName: 'Identity',
+    emoji: '🎭',
+    description: 'Dracula, Bride, Good, Evil, Hunters',
+    badgeClass: 'bg-purple-950/80 text-purple-200 border-purple-800/80',
+    activeChipClass: 'bg-purple-950 text-purple-200 border-purple-500 shadow-sm shadow-purple-900/50',
+    dotColor: '#a855f7',
+  },
+  {
+    id: 'adjacency',
+    name: 'Seating & Distance',
+    shortName: 'Seating',
+    emoji: '🧭',
+    description: 'Neighbors, CW/CCW, Distances, Closest/Farthest',
+    badgeClass: 'bg-sky-950/80 text-sky-200 border-sky-800/80',
+    activeChipClass: 'bg-sky-950 text-sky-200 border-sky-500 shadow-sm shadow-sky-900/50',
+    dotColor: '#0ea5e9',
+  },
+  {
+    id: 'history',
+    name: 'Room History',
+    shortName: 'History',
+    emoji: '📜',
+    description: 'Prior fails, Dracula actions, who failed',
+    badgeClass: 'bg-amber-950/80 text-amber-200 border-amber-800/80',
+    activeChipClass: 'bg-amber-950 text-amber-200 border-amber-500 shadow-sm shadow-amber-900/50',
+    dotColor: '#f59e0b',
+  },
+  {
+    id: 'blessing',
+    name: 'Blessings & Powers',
+    shortName: 'Blessings',
+    emoji: '⚡',
+    description: 'Dark Blessings & Hunters in play',
+    badgeClass: 'bg-emerald-950/80 text-emerald-200 border-emerald-800/80',
+    activeChipClass: 'bg-emerald-950 text-emerald-200 border-emerald-500 shadow-sm shadow-emerald-900/50',
+    dotColor: '#10b981',
+  },
+  {
+    id: 'counts',
+    name: 'Groups & Counts',
+    shortName: 'Groups',
+    emoji: '👥',
+    description: 'Evil pairs, largest good group',
+    badgeClass: 'bg-rose-950/80 text-rose-200 border-rose-800/80',
+    activeChipClass: 'bg-rose-950 text-rose-200 border-rose-500 shadow-sm shadow-rose-900/50',
+    dotColor: '#f43f5e',
   },
 ];
 
