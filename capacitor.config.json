@@ -1,0 +1,8 @@
+{
+  "appId": "com.draculasmasquerade.companion",
+  "appName": "Dracula's Masquerade",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

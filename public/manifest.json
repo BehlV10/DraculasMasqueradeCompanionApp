@@ -1,0 +1,18 @@
+{
+  "name": "Dracula's Masquerade - Host Companion",
+  "short_name": "Masquerade Host",
+  "description": "Storyteller & Renfield companion app for Dracula's Masquerade social deduction board game.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0b12",
+  "theme_color": "#0e0f18",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
