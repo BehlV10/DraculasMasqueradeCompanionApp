@@ -990,11 +990,19 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                   <span className="font-bold">Blessing #3 Spirits Factored In: </span>
                   {gameState.restlessSpirits && gameState.restlessSpirits.length > 0 ? (
                     <span>
-                      {gameState.restlessSpirits.map((s, idx) => (
-                        <span key={idx} className="mr-2">
-                          #{idx + 1}: {s.alignment === 'evil' ? '🔴 Evil' : '🔵 Good'} (Seats {s.betweenSeatA}&{s.betweenSeatB})
-                        </span>
-                      ))}
+                      {gameState.restlessSpirits.map((s, idx) => {
+                        const pA = players.find(p => p.seat === s.betweenSeatA);
+                        const pB = players.find(p => p.seat === s.betweenSeatB);
+                        const cA = pA ? getPlayerColor(pA.colorId) : undefined;
+                        const cB = pB ? getPlayerColor(pB.colorId) : undefined;
+                        const nA = pA ? `${pA.name} (${cA?.name})` : `Seat ${s.betweenSeatA}`;
+                        const nB = pB ? `${pB.name} (${cB?.name})` : `Seat ${s.betweenSeatB}`;
+                        return (
+                          <span key={idx} className="mr-2 inline-block">
+                            #{idx + 1}: {s.alignment === 'evil' ? '🔴 Evil' : '🔵 Good'} ({nA} ↔ {nB})
+                          </span>
+                        );
+                      })}
                     </span>
                   ) : (
                     <span>2 Spirits placed between seats</span>

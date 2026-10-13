@@ -71,8 +71,6 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
 
   const getSpiritCoordinates = (
     spirit: RestlessSpirit,
-    spiritIndex: number,
-    allSpirits: RestlessSpirit[],
     totalPlayers: number
   ) => {
     const { betweenSeatA, betweenSeatB } = spirit;
@@ -86,20 +84,8 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
       gapIndex = (minSeat - 1) + (maxSeat - minSeat) / 2;
     }
 
-    let angle = (gapIndex / totalPlayers) * 2 * Math.PI + Math.PI / 2;
-
-    const spiritsInSameGap = allSpirits.filter(s => {
-      const sMin = Math.min(s.betweenSeatA, s.betweenSeatB);
-      const sMax = Math.max(s.betweenSeatA, s.betweenSeatB);
-      return sMin === minSeat && sMax === maxSeat;
-    });
-
-    let radius = 38;
-    if (spiritsInSameGap.length > 1) {
-      const idxInGap = spiritsInSameGap.indexOf(spirit);
-      radius = idxInGap === 0 ? 32 : 44;
-      angle += (idxInGap === 0 ? -0.06 : 0.06);
-    }
+    const angle = (gapIndex / totalPlayers) * 2 * Math.PI + Math.PI / 2;
+    const radius = 38;
 
     const x = 50 + radius * Math.cos(angle);
     const y = 50 + radius * Math.sin(angle);
@@ -266,8 +252,14 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
 
           {/* Restless Spirits placed between seats on circular table */}
           {restlessSpirits.map((spirit, sIdx) => {
-            const { x, y } = getSpiritCoordinates(spirit, sIdx, restlessSpirits, total);
+            const { x, y } = getSpiritCoordinates(spirit, total);
             const isEvil = spirit.alignment === 'evil';
+            const pA = players.find(p => p.seat === spirit.betweenSeatA);
+            const pB = players.find(p => p.seat === spirit.betweenSeatB);
+            const colA = pA ? getPlayerColor(pA.colorId) : undefined;
+            const colB = pB ? getPlayerColor(pB.colorId) : undefined;
+            const labelA = pA ? `${pA.name} (${colA?.name})` : `Seat ${spirit.betweenSeatA}`;
+            const labelB = pB ? `${pB.name} (${colB?.name})` : `Seat ${spirit.betweenSeatB}`;
 
             return (
               <div
@@ -277,7 +269,7 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
                   top: `${y}%`,
                   transform: 'translate(-50%, -50%)',
                 }}
-                title={`Restless Spirit #${sIdx + 1}: ${isEvil ? 'Evil' : 'Good'} (Between Seat ${spirit.betweenSeatA} & ${spirit.betweenSeatB})`}
+                title={`Restless Spirit #${sIdx + 1}: ${isEvil ? 'Evil' : 'Good'} Dot between ${labelA} & ${labelB}`}
                 className="absolute z-20 flex flex-col items-center pointer-events-auto select-none"
               >
                 <div
@@ -389,35 +381,44 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
                   </div>
                 </div>
 
-                {spiritsBetween.map((spirit, sIdx) => (
-                  <div
-                    key={`spirit_inline_${pIdx}_${sIdx}`}
-                    className={`sm:col-span-2 p-2 rounded-xl border flex items-center justify-between text-xs my-0.5 ${
-                      spirit.alignment === 'evil'
-                        ? 'bg-gradient-to-r from-red-950/40 via-zinc-950 to-red-950/20 border-red-800/60 text-red-200'
-                        : 'bg-gradient-to-r from-blue-950/40 via-zinc-950 to-blue-950/20 border-blue-800/60 text-blue-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Ghost className={`w-4 h-4 ${spirit.alignment === 'evil' ? 'text-red-400' : 'text-blue-400'} animate-pulse`} />
-                      <div>
-                        <span className="font-bold text-xs">
-                          Restless Spirit ({spirit.alignment === 'evil' ? '🔴 Evil Dot' : '🔵 Good Dot'})
-                        </span>
-                        <span className="text-[10px] text-zinc-400 block">
-                          Positioned between Seat {spirit.betweenSeatA} and Seat {spirit.betweenSeatB}
-                        </span>
+                {spiritsBetween.map((spirit, sIdx) => {
+                  const sPlayerA = players.find(x => x.seat === spirit.betweenSeatA);
+                  const sPlayerB = players.find(x => x.seat === spirit.betweenSeatB);
+                  const sColA = sPlayerA ? getPlayerColor(sPlayerA.colorId) : undefined;
+                  const sColB = sPlayerB ? getPlayerColor(sPlayerB.colorId) : undefined;
+                  const sNameA = sPlayerA ? `${sPlayerA.name} (${sColA?.name})` : `Seat ${spirit.betweenSeatA}`;
+                  const sNameB = sPlayerB ? `${sPlayerB.name} (${sColB?.name})` : `Seat ${spirit.betweenSeatB}`;
+
+                  return (
+                    <div
+                      key={`spirit_inline_${pIdx}_${sIdx}`}
+                      className={`sm:col-span-2 p-2 rounded-xl border flex items-center justify-between text-xs my-0.5 ${
+                        spirit.alignment === 'evil'
+                          ? 'bg-gradient-to-r from-red-950/40 via-zinc-950 to-red-950/20 border-red-800/60 text-red-200'
+                          : 'bg-gradient-to-r from-blue-950/40 via-zinc-950 to-blue-950/20 border-blue-800/60 text-blue-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Ghost className={`w-4 h-4 ${spirit.alignment === 'evil' ? 'text-red-400' : 'text-blue-400'} animate-pulse`} />
+                        <div>
+                          <span className="font-bold text-xs">
+                            Restless Spirit ({spirit.alignment === 'evil' ? '🔴 Evil Dot' : '🔵 Good Dot'})
+                          </span>
+                          <span className="text-[10px] text-zinc-400 block">
+                            Positioned between {sNameA} and {sNameB} [Seats {spirit.betweenSeatA} & {spirit.betweenSeatB}]
+                          </span>
+                        </div>
                       </div>
+                      <span className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded border ${
+                        spirit.alignment === 'evil'
+                          ? 'bg-red-950 border-red-700 text-red-300'
+                          : 'bg-blue-950 border-blue-700 text-blue-300'
+                      }`}>
+                        {spirit.alignment}
+                      </span>
                     </div>
-                    <span className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded border ${
-                      spirit.alignment === 'evil'
-                        ? 'bg-red-950 border-red-700 text-red-300'
-                        : 'bg-blue-950 border-blue-700 text-blue-300'
-                    }`}>
-                      {spirit.alignment}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </React.Fragment>
             );
           })}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { DarkBlessingId, GameState, HunterType, Player, RestlessSpirit } from '../types/game';
 import { DARK_BLESSINGS, HUNTERS } from '../data/gameData';
 import { getPlayerColor } from '../utils/gameLogic';
@@ -23,26 +23,96 @@ export const NightTab: React.FC<NightTabProps> = ({
   const goodPlayers = players.filter(p => p.role === 'guest' || p.role === 'hunter');
   const guests = players.filter(p => p.role === 'guest');
 
-  // Compute all adjacent seat pairs around the circle
-  const adjacentPairs = players.map((p, idx) => {
-    const nextP = players[(idx + 1) % players.length];
+  // Sorted players by seat
+  const sortedPlayers = [...players].sort((a, b) => a.seat - b.seat);
+
+  // Compute all adjacent seat pairs around the circle with player names, colors, and seat numbers
+  const adjacentPairs = sortedPlayers.map((p, idx) => {
+    const nextP = sortedPlayers[(idx + 1) % sortedPlayers.length];
+    const pColor = getPlayerColor(p.colorId);
+    const nextPColor = getPlayerColor(nextP.colorId);
+    const pName = p.name || `Player ${p.seat}`;
+    const nextPName = nextP.name || `Player ${nextP.seat}`;
     return {
       seatA: p.seat,
       seatB: nextP.seat,
-      label: `Between Seat ${p.seat} (${p.name}) & Seat ${nextP.seat} (${nextP.name})`,
+      playerA: p,
+      playerB: nextP,
+      colorA: pColor,
+      colorB: nextPColor,
+      label: `Between ${pName} (${pColor.name}) & ${nextPName} (${nextPColor.name}) [Seats ${p.seat} & ${nextP.seat}]`,
+      shortLabel: `${pName} (${pColor.name}) ↔ ${nextPName} (${nextPColor.name})`,
     };
   });
+
+  // Automatically separate spirits if existing state has 2 spirits in the exact same gap
+  useEffect(() => {
+    if (chosenBlessingId === 3 && restlessSpirits && restlessSpirits.length >= 2) {
+      const s0 = restlessSpirits[0];
+      const s1 = restlessSpirits[1];
+      const same =
+        (s0.betweenSeatA === s1.betweenSeatA && s0.betweenSeatB === s1.betweenSeatB) ||
+        (s0.betweenSeatA === s1.betweenSeatB && s0.betweenSeatB === s1.betweenSeatA);
+      if (same && sortedPlayers.length > 1) {
+        const pairs = sortedPlayers.map((p, idx) => ({
+          seatA: p.seat,
+          seatB: sortedPlayers[(idx + 1) % sortedPlayers.length].seat,
+        }));
+        const available = pairs.find(
+          p =>
+            !(
+              (p.seatA === s0.betweenSeatA && p.seatB === s0.betweenSeatB) ||
+              (p.seatA === s0.betweenSeatB && p.seatB === s0.betweenSeatA)
+            )
+        );
+        if (available) {
+          handleUpdateSpirit(1, {
+            betweenSeatA: available.seatA,
+            betweenSeatB: available.seatB,
+          });
+        }
+      }
+    }
+  }, [chosenBlessingId, restlessSpirits, players]);
 
   // Handle Dark Blessing in play selection
   const handleSelectBlessing = (bId: DarkBlessingId) => {
     setGameState(prev => {
       let nextSpirits = prev.restlessSpirits || [];
-      if (bId === 3 && nextSpirits.length < 2) {
-        const n = prev.players.length || 8;
-        nextSpirits = [
-          { betweenSeatA: 1, betweenSeatB: 2, alignment: 'evil' },
-          { betweenSeatA: Math.min(3, n), betweenSeatB: Math.min(4, n) > Math.min(3, n) ? Math.min(4, n) : 1, alignment: 'good' },
-        ];
+      if (bId === 3) {
+        const sorted = [...prev.players].sort((a, b) => a.seat - b.seat);
+        const pairs = sorted.map((p, idx) => ({
+          seatA: p.seat,
+          seatB: sorted[(idx + 1) % sorted.length].seat,
+        }));
+        if (nextSpirits.length < 2) {
+          const pair1 = pairs[0] || { seatA: 1, seatB: 2 };
+          const pair2 = pairs[2] || pairs[1] || { seatA: 2, seatB: 3 };
+          nextSpirits = [
+            { betweenSeatA: pair1.seatA, betweenSeatB: pair1.seatB, alignment: 'evil' },
+            { betweenSeatA: pair2.seatA, betweenSeatB: pair2.seatB, alignment: 'good' },
+          ];
+        } else {
+          // Verify that spirits are in distinct gaps
+          const s0 = nextSpirits[0];
+          const s1 = nextSpirits[1];
+          const same =
+            (s0.betweenSeatA === s1.betweenSeatA && s0.betweenSeatB === s1.betweenSeatB) ||
+            (s0.betweenSeatA === s1.betweenSeatB && s0.betweenSeatB === s1.betweenSeatA);
+          if (same && pairs.length > 1) {
+            const openPair = pairs.find(
+              p =>
+                !(
+                  (p.seatA === s0.betweenSeatA && p.seatB === s0.betweenSeatB) ||
+                  (p.seatA === s0.betweenSeatB && p.seatB === s0.betweenSeatA)
+                )
+            ) || pairs[1];
+            nextSpirits = [
+              s0,
+              { ...s1, betweenSeatA: openPair.seatA, betweenSeatB: openPair.seatB },
+            ];
+          }
+        }
       }
 
       // Clean up previous blessing artifacts when switching blessings
@@ -74,7 +144,7 @@ export const NightTab: React.FC<NightTabProps> = ({
     }));
   };
 
-  // Update a specific restless spirit
+  // Update a specific restless spirit (ensures max 1 spirit per gap)
   const handleUpdateSpirit = (index: number, updates: Partial<RestlessSpirit>) => {
     setGameState(prev => {
       const spirits = [...(prev.restlessSpirits || [])];
@@ -82,6 +152,39 @@ export const NightTab: React.FC<NightTabProps> = ({
         spirits.push({ betweenSeatA: 1, betweenSeatB: 2, alignment: 'evil' });
       }
       spirits[index] = { ...spirits[index], ...updates };
+
+      // Ensure no 2 spirits are placed in the exact same gap
+      const otherIndex = index === 0 ? 1 : 0;
+      if (spirits[otherIndex]) {
+        const cur = spirits[index];
+        const oth = spirits[otherIndex];
+        const same =
+          (cur.betweenSeatA === oth.betweenSeatA && cur.betweenSeatB === oth.betweenSeatB) ||
+          (cur.betweenSeatA === oth.betweenSeatB && cur.betweenSeatB === oth.betweenSeatA);
+
+        if (same) {
+          const sorted = [...prev.players].sort((a, b) => a.seat - b.seat);
+          const pairs = sorted.map((p, idx) => ({
+            seatA: p.seat,
+            seatB: sorted[(idx + 1) % sorted.length].seat,
+          }));
+          const available = pairs.find(
+            p =>
+              !(
+                (p.seatA === cur.betweenSeatA && p.seatB === cur.betweenSeatB) ||
+                (p.seatA === cur.betweenSeatB && p.seatB === cur.betweenSeatA)
+              )
+          );
+          if (available) {
+            spirits[otherIndex] = {
+              ...spirits[otherIndex],
+              betweenSeatA: available.seatA,
+              betweenSeatB: available.seatB,
+            };
+          }
+        }
+      }
+
       return {
         ...prev,
         restlessSpirits: spirits,
@@ -339,11 +442,18 @@ export const NightTab: React.FC<NightTabProps> = ({
             {/* Spirit 1 & Spirit 2 Placement Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[0, 1].map(sIdx => {
+                const otherIdx = sIdx === 0 ? 1 : 0;
                 const spirit = (restlessSpirits && restlessSpirits[sIdx]) || {
                   betweenSeatA: sIdx === 0 ? 1 : 2,
-                  betweenSeatB: sIdx === 0 ? 2 : 3,
+                  betweenSeatB: sIdx === 0 ? 2 : (sortedPlayers.length > 2 ? 3 : 1),
                   alignment: sIdx === 0 ? 'evil' : 'good',
                 };
+                const otherSpirit = restlessSpirits && restlessSpirits[otherIdx];
+
+                const pA = sortedPlayers.find(p => p.seat === spirit.betweenSeatA);
+                const pB = sortedPlayers.find(p => p.seat === spirit.betweenSeatB);
+                const colA = pA ? getPlayerColor(pA.colorId) : undefined;
+                const colB = pB ? getPlayerColor(pB.colorId) : undefined;
 
                 return (
                   <div
@@ -370,9 +480,14 @@ export const NightTab: React.FC<NightTabProps> = ({
 
                     {/* Adjacent Pair Dropdown */}
                     <div>
-                      <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
-                        Placed Between Players:
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] uppercase font-bold text-zinc-400">
+                          Placed Between Players:
+                        </label>
+                        <span className="text-[9px] text-zinc-500 font-medium">
+                          (Only 1 spirit per gap)
+                        </span>
+                      </div>
                       <select
                         value={`${spirit.betweenSeatA}_${spirit.betweenSeatB}`}
                         onChange={e => {
@@ -381,12 +496,49 @@ export const NightTab: React.FC<NightTabProps> = ({
                         }}
                         className="w-full bg-zinc-900/90 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-200 focus:outline-none focus:border-purple-500 font-medium"
                       >
-                        {adjacentPairs.map(pair => (
-                          <option key={`${pair.seatA}_${pair.seatB}`} value={`${pair.seatA}_${pair.seatB}`}>
-                            {pair.label}
-                          </option>
-                        ))}
+                        {adjacentPairs.map(pair => {
+                          const isOccupiedByOther = Boolean(
+                            otherSpirit &&
+                            (
+                              (pair.seatA === otherSpirit.betweenSeatA && pair.seatB === otherSpirit.betweenSeatB) ||
+                              (pair.seatA === otherSpirit.betweenSeatB && pair.seatB === otherSpirit.betweenSeatA)
+                            )
+                          );
+                          return (
+                            <option
+                              key={`${pair.seatA}_${pair.seatB}`}
+                              value={`${pair.seatA}_${pair.seatB}`}
+                              disabled={isOccupiedByOther}
+                              className={isOccupiedByOther ? 'text-zinc-600 bg-zinc-950 italic' : ''}
+                            >
+                              {pair.label} {isOccupiedByOther ? `(Occupied by Spirit #${otherIdx + 1})` : ''}
+                            </option>
+                          );
+                        })}
                       </select>
+
+                      {/* Player Preview Badge with Colors */}
+                      {pA && pB && colA && colB && (
+                        <div className="flex items-center justify-between mt-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900/80 border border-zinc-800 text-[11px]">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0 border border-white/20"
+                              style={{ backgroundColor: colA.hex }}
+                            />
+                            <span className="font-semibold text-zinc-200 truncate">{pA.name}</span>
+                            <span className="text-[10px] text-zinc-400 flex-shrink-0">({colA.name})</span>
+                          </div>
+                          <span className="text-zinc-500 mx-2 flex-shrink-0 font-bold">↔</span>
+                          <div className="flex items-center gap-1.5 min-w-0 justify-end">
+                            <span className="font-semibold text-zinc-200 truncate">{pB.name}</span>
+                            <span className="text-[10px] text-zinc-400 flex-shrink-0">({colB.name})</span>
+                            <span
+                              className="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0 border border-white/20"
+                              style={{ backgroundColor: colB.hex }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Alignment Toggle Buttons */}
