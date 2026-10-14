@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DarkBlessingId, GameState, HunterType, Player, RestlessSpirit } from '../types/game';
 import { DARK_BLESSINGS, HUNTERS } from '../data/gameData';
 import { getPlayerColor } from '../utils/gameLogic';
@@ -22,6 +22,7 @@ export const NightTab: React.FC<NightTabProps> = ({
   const huntersInPlay = players.filter(p => p.role === 'hunter');
   const goodPlayers = players.filter(p => p.role === 'guest' || p.role === 'hunter');
   const guests = players.filter(p => p.role === 'guest');
+  const [selectedSpiritIdx, setSelectedSpiritIdx] = useState<number>(0);
 
   // Sorted players by seat
   const sortedPlayers = [...players].sort((a, b) => a.seat - b.seat);
@@ -458,7 +459,12 @@ export const NightTab: React.FC<NightTabProps> = ({
                 return (
                   <div
                     key={sIdx}
-                    className={`p-3 rounded-xl border space-y-2.5 transition-all ${
+                    onClick={() => setSelectedSpiritIdx(sIdx)}
+                    className={`p-3 rounded-xl border space-y-2.5 transition-all cursor-pointer ${
+                      selectedSpiritIdx === sIdx
+                        ? 'ring-2 ring-purple-400 border-purple-500 shadow-lg shadow-purple-950/60'
+                        : 'hover:border-zinc-700'
+                    } ${
                       spirit.alignment === 'evil'
                         ? 'bg-red-950/30 border-red-900/70 shadow-sm'
                         : 'bg-blue-950/30 border-blue-900/70 shadow-sm'
@@ -468,6 +474,11 @@ export const NightTab: React.FC<NightTabProps> = ({
                       <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
                         <Ghost className={`w-3.5 h-3.5 ${spirit.alignment === 'evil' ? 'text-red-400' : 'text-blue-400'}`} />
                         Restless Spirit #{sIdx + 1}
+                        {selectedSpiritIdx === sIdx && (
+                          <span className="text-[9px] font-mono font-bold text-purple-300 bg-purple-900/80 px-1.5 py-0.5 rounded border border-purple-600 animate-pulse">
+                            Active
+                          </span>
+                        )}
                       </span>
                       <span className={`text-[10px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
                         spirit.alignment === 'evil'
@@ -580,15 +591,22 @@ export const NightTab: React.FC<NightTabProps> = ({
 
             {/* Live Table Preview */}
             <div className="pt-2 border-t border-purple-900/40">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-semibold text-purple-300">
-                  Live Seating Table (Spirits Placed):
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+                <span className="text-[11px] font-semibold text-purple-300 flex items-center gap-1.5">
+                  <Ghost className="w-3.5 h-3.5 text-purple-400" />
+                  Interactive Seating Table (Drag & Drop or Tap to Place):
                 </span>
                 <span className="text-[10px] text-zinc-400">
-                  Glowing orbs appear between seats
+                  ✨ Drag spirits to any gap or tap empty slots
                 </span>
               </div>
-              <SeatingChart players={players} restlessSpirits={restlessSpirits} />
+              <SeatingChart
+                players={players}
+                restlessSpirits={restlessSpirits}
+                onUpdateSpirit={handleUpdateSpirit}
+                activeSpiritIndex={selectedSpiritIdx}
+                onSelectSpiritIndex={setSelectedSpiritIdx}
+              />
             </div>
           </div>
         )}

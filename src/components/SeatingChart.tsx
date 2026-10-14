@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Player, RoleType, RestlessSpirit } from '../types/game';
 import { getPlayerColor } from '../utils/gameLogic';
 import { HUNTERS } from '../data/gameData';
@@ -10,6 +10,9 @@ interface SeatingChartProps {
   onSelectPlayer?: (player: Player) => void;
   selectedPlayerId?: string | null;
   interactive?: boolean;
+  onUpdateSpirit?: (index: number, updates: Partial<RestlessSpirit>) => void;
+  activeSpiritIndex?: number | null;
+  onSelectSpiritIndex?: (index: number) => void;
 }
 
 export const SeatingChart: React.FC<SeatingChartProps> = ({
@@ -18,8 +21,25 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
   onSelectPlayer,
   selectedPlayerId,
   interactive = false,
+  onUpdateSpirit,
+  activeSpiritIndex,
+  onSelectSpiritIndex,
 }) => {
   const [viewMode, setViewMode] = useState<'circle' | 'list'>('circle');
+  const [draggingSpiritIdx, setDraggingSpiritIdx] = useState<number | null>(null);
+  const [dragCoords, setDragCoords] = useState<{ x: number; y: number } | null>(null);
+  const [hoverGap, setHoverGap] = useState<{
+    seatA: number;
+    seatB: number;
+    nameA: string;
+    nameB: string;
+    angle: number;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const pointerStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const circleContainerRef = useRef<HTMLDivElement>(null);
 
   const getRoleBadge = (player: Player) => {
     switch (player.role) {
@@ -93,7 +113,152 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
     return { x, y };
   };
 
-  const total = players.length;
+  const sortedPlayers = [...players].sort((a, b) => a.seat - b.seat);
+  const total = sortedPlayers.length;
+
+  // Precalculate all gaps between adjacent players around the table
+  const allGaps = sortedPlayers.map((p, idx) => {
+    const nextP = sortedPlayers[(idx + 1) % total];
+    const minSeat = Math.min(p.seat, nextP.seat);
+    const maxSeat = Math.max(p.seat, nextP.seat);
+    let gapIndex: number;
+    if (minSeat === 1 && maxSeat === total) {
+      gapIndex = total - 0.5;
+    } else {
+      gapIndex = (minSeat - 1) + (maxSeat - minSeat) / 2;
+    }
+    const angle = (gapIndex / total) * 2 * Math.PI + Math.PI / 2;
+    const radius = 38;
+    const x = 50 + radius * Math.cos(angle);
+    const y = 50 + radius * Math.sin(angle);
+    const colA = getPlayerColor(p.colorId);
+    const colB = getPlayerColor(nextP.colorId);
+
+    return {
+      seatA: p.seat,
+      seatB: nextP.seat,
+      nameA: p.name || `Player ${p.seat}`,
+      nameB: nextP.name || `Player ${nextP.seat}`,
+      colorA: colA,
+      colorB: colB,
+      gapIndex,
+      angle,
+      x,
+      y,
+    };
+  });
+
+  const isSameGap = (spirit: RestlessSpirit, gap: { seatA: number; seatB: number }) => {
+    return (
+      (spirit.betweenSeatA === gap.seatA && spirit.betweenSeatB === gap.seatB) ||
+      (spirit.betweenSeatA === gap.seatB && spirit.betweenSeatB === gap.seatA)
+    );
+  };
+
+  const findClosestGap = (cursorAngle: number) => {
+    if (allGaps.length === 0) return null;
+    let bestGap = allGaps[0];
+    let minDiff = Infinity;
+    for (const gap of allGaps) {
+      let diff = Math.abs(cursorAngle - gap.angle) % (2 * Math.PI);
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestGap = gap;
+      }
+    }
+    return bestGap;
+  };
+
+  const handleSpiritPointerDown = (e: React.PointerEvent<HTMLDivElement>, sIdx: number) => {
+    if (!onUpdateSpirit) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // fallback
+    }
+
+    pointerStartPos.current = { x: e.clientX, y: e.clientY };
+    setDraggingSpiritIdx(sIdx);
+    onSelectSpiritIndex?.(sIdx);
+
+    const rect = circleContainerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const relX = Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100));
+      const relY = Math.max(5, Math.min(95, ((e.clientY - rect.top) / rect.height) * 100));
+      setDragCoords({ x: relX, y: relY });
+
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const cursorAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+      const closest = findClosestGap(cursorAngle);
+      setHoverGap(closest);
+    }
+  };
+
+  const handleSpiritPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (draggingSpiritIdx === null) return;
+    e.preventDefault();
+    const rect = circleContainerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const relX = Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100));
+    const relY = Math.max(5, Math.min(95, ((e.clientY - rect.top) / rect.height) * 100));
+    setDragCoords({ x: relX, y: relY });
+
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const cursorAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+    const closest = findClosestGap(cursorAngle);
+    setHoverGap(closest);
+  };
+
+  const handleSpiritPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (draggingSpiritIdx === null) return;
+    e.preventDefault();
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // fallback
+    }
+
+    const dist = Math.hypot(
+      e.clientX - pointerStartPos.current.x,
+      e.clientY - pointerStartPos.current.y
+    );
+
+    // If moved more than 6px, treat as drag & drop
+    if (dist >= 6 && hoverGap && onUpdateSpirit) {
+      const otherIdx = draggingSpiritIdx === 0 ? 1 : 0;
+      const otherSpirit = restlessSpirits[otherIdx];
+      const isOtherOnThisGap = otherSpirit && (
+        (otherSpirit.betweenSeatA === hoverGap.seatA && otherSpirit.betweenSeatB === hoverGap.seatB) ||
+        (otherSpirit.betweenSeatA === hoverGap.seatB && otherSpirit.betweenSeatB === hoverGap.seatA)
+      );
+
+      if (isOtherOnThisGap) {
+        // Swap with other spirit
+        const curSpirit = restlessSpirits[draggingSpiritIdx];
+        if (curSpirit) {
+          onUpdateSpirit(otherIdx, {
+            betweenSeatA: curSpirit.betweenSeatA,
+            betweenSeatB: curSpirit.betweenSeatB,
+          });
+        }
+      }
+
+      onUpdateSpirit(draggingSpiritIdx, {
+        betweenSeatA: hoverGap.seatA,
+        betweenSeatB: hoverGap.seatB,
+      });
+    }
+
+    setDraggingSpiritIdx(null);
+    setDragCoords(null);
+    setHoverGap(null);
+  };
 
   return (
     <div className="bg-[#10111d] rounded-2xl border border-rose-950/40 p-3 sm:p-4">
@@ -134,7 +299,10 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
 
       {/* Circle View */}
       {viewMode === 'circle' && (
-        <div className="relative w-full max-w-[340px] xs:max-w-[380px] sm:max-w-[420px] aspect-square mx-auto my-2">
+        <div
+          ref={circleContainerRef}
+          className="relative w-full max-w-[340px] xs:max-w-[380px] sm:max-w-[420px] aspect-square mx-auto my-2 select-none"
+        >
           {/* Table Center Graphic */}
           <div className="absolute inset-[24%] rounded-full bg-gradient-to-br from-zinc-900 to-[#181928] border border-rose-950/60 shadow-inner flex flex-col items-center justify-center text-center p-2 z-0">
             <span className="text-xs font-serif font-bold text-rose-200/90 tracking-wider">
@@ -157,6 +325,50 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
             )}
             <span className="text-[9px] text-zinc-500 italic mt-0.5">Clockwise ➔</span>
           </div>
+
+          {/* Drag Hover Snap Banner */}
+          {draggingSpiritIdx !== null && hoverGap && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-35 px-2.5 py-1 rounded-full bg-purple-950/95 border border-purple-400 text-[10px] text-purple-200 font-bold shadow-[0_0_15px_rgba(168,85,247,0.8)] pointer-events-none whitespace-nowrap animate-pulse flex items-center gap-1.5">
+              <Ghost className="w-3 h-3 text-purple-300" />
+              <span>Snap: {hoverGap.nameA} ↔ {hoverGap.nameB}</span>
+            </div>
+          )}
+
+          {/* Interactive Empty Gap Drop / Tap Slots (when onUpdateSpirit is provided) */}
+          {onUpdateSpirit && allGaps.map(gap => {
+            const isOccupiedBySpirit0 = restlessSpirits[0] && isSameGap(restlessSpirits[0], gap);
+            const isOccupiedBySpirit1 = restlessSpirits[1] && isSameGap(restlessSpirits[1], gap);
+            if (isOccupiedBySpirit0 || isOccupiedBySpirit1) return null;
+
+            const isHovered = draggingSpiritIdx !== null && hoverGap && hoverGap.seatA === gap.seatA && hoverGap.seatB === gap.seatB;
+            const targetSpiritIdx = activeSpiritIndex ?? (draggingSpiritIdx ?? 0);
+
+            return (
+              <div
+                key={`empty_gap_${gap.seatA}_${gap.seatB}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateSpirit(targetSpiritIdx, {
+                    betweenSeatA: gap.seatA,
+                    betweenSeatB: gap.seatB,
+                  });
+                }}
+                style={{
+                  left: `${gap.x}%`,
+                  top: `${gap.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+                title={`Tap to place Spirit #${targetSpiritIdx + 1} between ${gap.nameA} & ${gap.nameB}`}
+                className={`absolute z-15 flex items-center justify-center cursor-pointer transition-all ${
+                  isHovered
+                    ? 'w-8 h-8 rounded-full border-2 border-purple-400 bg-purple-900/80 shadow-[0_0_16px_rgba(168,85,247,0.9)] scale-125'
+                    : 'w-6 h-6 rounded-full border border-dashed border-purple-500/40 hover:border-purple-300 hover:bg-purple-950/70 hover:scale-120'
+                }`}
+              >
+                <Ghost className={`w-3 h-3 ${isHovered ? 'text-purple-200 animate-pulse' : 'text-purple-400/40'}`} />
+              </div>
+            );
+          })}
 
           {/* Player Seats positioned in circle (Seat 1 at bottom, progressing clockwise) */}
           {players.map((p, index) => {
@@ -252,34 +464,62 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
 
           {/* Restless Spirits placed between seats on circular table */}
           {restlessSpirits.map((spirit, sIdx) => {
-            const { x, y } = getSpiritCoordinates(spirit, total);
+            const isDragging = draggingSpiritIdx === sIdx;
             const isEvil = spirit.alignment === 'evil';
+            const matchingGap = allGaps.find(g => isSameGap(spirit, g));
+            const staticX = matchingGap ? matchingGap.x : getSpiritCoordinates(spirit, total).x;
+            const staticY = matchingGap ? matchingGap.y : getSpiritCoordinates(spirit, total).y;
+            const posX = isDragging && dragCoords ? dragCoords.x : staticX;
+            const posY = isDragging && dragCoords ? dragCoords.y : staticY;
+
             const pA = players.find(p => p.seat === spirit.betweenSeatA);
             const pB = players.find(p => p.seat === spirit.betweenSeatB);
             const colA = pA ? getPlayerColor(pA.colorId) : undefined;
             const colB = pB ? getPlayerColor(pB.colorId) : undefined;
             const labelA = pA ? `${pA.name} (${colA?.name})` : `Seat ${spirit.betweenSeatA}`;
             const labelB = pB ? `${pB.name} (${colB?.name})` : `Seat ${spirit.betweenSeatB}`;
+            const isSelected = activeSpiritIndex === sIdx;
 
             return (
               <div
-                key={`spirit_${sIdx}_${spirit.betweenSeatA}_${spirit.betweenSeatB}`}
-                style={{
-                  left: `${x}%`,
-                  top: `${y}%`,
-                  transform: 'translate(-50%, -50%)',
+                key={`spirit_${sIdx}`}
+                onPointerDown={(e) => handleSpiritPointerDown(e, sIdx)}
+                onPointerMove={handleSpiritPointerMove}
+                onPointerUp={handleSpiritPointerUp}
+                onPointerCancel={handleSpiritPointerUp}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectSpiritIndex?.(sIdx);
                 }}
-                title={`Restless Spirit #${sIdx + 1}: ${isEvil ? 'Evil' : 'Good'} Dot between ${labelA} & ${labelB}`}
-                className="absolute z-20 flex flex-col items-center pointer-events-auto select-none"
+                style={{
+                  left: `${posX}%`,
+                  top: `${posY}%`,
+                  transform: 'translate(-50%, -50%)',
+                  transition: isDragging ? 'none' : 'left 0.25s ease-out, top 0.25s ease-out, transform 0.15s ease',
+                }}
+                title={
+                  onUpdateSpirit
+                    ? `Spirit #${sIdx + 1} (${isEvil ? 'Evil' : 'Good'} Dot) - Drag to move or tap to select`
+                    : `Restless Spirit #${sIdx + 1}: ${isEvil ? 'Evil' : 'Good'} Dot between ${labelA} & ${labelB}`
+                }
+                className={`absolute ${isDragging ? 'z-40' : 'z-20'} flex flex-col items-center select-none touch-none ${
+                  onUpdateSpirit ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-auto'
+                } ${isSelected && !isDragging ? 'scale-110' : ''}`}
               >
                 <div
-                  className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 flex items-center justify-center shadow-lg transition-transform hover:scale-125 cursor-help ${
+                  className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 flex items-center justify-center shadow-lg transition-transform ${
+                    isDragging
+                      ? 'scale-130 shadow-[0_0_22px_rgba(168,85,247,0.95)] ring-2 ring-purple-300'
+                      : isSelected
+                      ? 'ring-2 ring-purple-400 ring-offset-1 ring-offset-black'
+                      : 'hover:scale-115'
+                  } ${
                     isEvil
                       ? 'bg-gradient-to-br from-red-950 via-zinc-950 to-red-900 border-red-500 text-red-200 shadow-[0_0_12px_rgba(239,68,68,0.7)]'
                       : 'bg-gradient-to-br from-blue-950 via-zinc-950 to-indigo-900 border-blue-400 text-blue-200 shadow-[0_0_12px_rgba(59,130,246,0.7)]'
                   }`}
                 >
-                  <Ghost className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isEvil ? 'text-red-400' : 'text-blue-300'} animate-pulse`} />
+                  <Ghost className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isEvil ? 'text-red-400' : 'text-blue-300'} ${isDragging ? 'animate-bounce' : 'animate-pulse'}`} />
                   
                   {/* Mini Dot Indicator */}
                   <span
