@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Player, RoleType, RestlessSpirit } from '../types/game';
 import { getPlayerColor } from '../utils/gameLogic';
 import { HUNTERS } from '../data/gameData';
-import { Heart, LayoutGrid, CircleDot, ShieldAlert, Sparkles, Ghost, BookOpen } from 'lucide-react';
+import { Heart, LayoutGrid, CircleDot, ShieldAlert, Sparkles, Ghost, BookOpen, ArrowUpDown } from 'lucide-react';
 
 interface SeatingChartProps {
   players: Player[];
@@ -15,6 +15,7 @@ interface SeatingChartProps {
   onSelectSpiritIndex?: (index: number) => void;
   narratorAngle?: number;
   onUpdateNarratorAngle?: (angle: number) => void;
+  onSwapPlayers?: (playerAId: string, playerBId: string) => void;
 }
 
 export const SeatingChart: React.FC<SeatingChartProps> = ({
@@ -28,6 +29,7 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
   onSelectSpiritIndex,
   narratorAngle = Math.PI / 2,
   onUpdateNarratorAngle,
+  onSwapPlayers,
 }) => {
   const [viewMode, setViewMode] = useState<'circle' | 'list'>('circle');
   const [draggingSpiritIdx, setDraggingSpiritIdx] = useState<number | null>(null);
@@ -88,6 +90,102 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
     if (onUpdateNarratorAngle) {
       onUpdateNarratorAngle(finalAngle);
     }
+  };
+
+  // Seat swapping state (BOTC style)
+  const [swapSourcePlayerId, setSwapSourcePlayerId] = useState<string | null>(null);
+  const [draggingSeatPlayerId, setDraggingSeatPlayerId] = useState<string | null>(null);
+  const [dragSeatCoords, setDragSeatCoords] = useState<{ x: number; y: number } | null>(null);
+  const [hoverSeatPlayerId, setHoverSeatPlayerId] = useState<string | null>(null);
+
+  const seatPointerStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const seatDragCandidateId = useRef<string | null>(null);
+
+  const handleSeatPointerDown = (e: React.PointerEvent<HTMLDivElement>, pId: string) => {
+    if (!onSwapPlayers) return;
+    e.stopPropagation();
+    seatPointerStartPos.current = { x: e.clientX, y: e.clientY };
+    seatDragCandidateId.current = pId;
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // fallback
+    }
+  };
+
+  const handleSeatPointerMove = (e: React.PointerEvent<HTMLDivElement>, pId: string) => {
+    if (!onSwapPlayers || seatDragCandidateId.current !== pId) return;
+    const dist = Math.hypot(
+      e.clientX - seatPointerStartPos.current.x,
+      e.clientY - seatPointerStartPos.current.y
+    );
+    if (dist > 8) {
+      if (draggingSeatPlayerId !== pId) {
+        setDraggingSeatPlayerId(pId);
+      }
+      const rect = circleContainerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const relX = Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100));
+        const relY = Math.max(5, Math.min(95, ((e.clientY - rect.top) / rect.height) * 100));
+        setDragSeatCoords({ x: relX, y: relY });
+
+        // Find which other player seat the pointer is hovering over
+        let closestPlayerId: string | null = null;
+        let minDistance = Infinity;
+
+        players.forEach((otherP, idx) => {
+          if (otherP.id === pId) return;
+          const angle = (idx / players.length) * 2 * Math.PI + Math.PI / 2;
+          const radius = 38;
+          const targetX = 50 + radius * Math.cos(angle);
+          const targetY = 50 + radius * Math.sin(angle);
+          const d = Math.hypot(relX - targetX, relY - targetY);
+          if (d < 16 && d < minDistance) {
+            minDistance = d;
+            closestPlayerId = otherP.id;
+          }
+        });
+
+        setHoverSeatPlayerId(closestPlayerId);
+      }
+    }
+  };
+
+  const handleSeatPointerUp = (e: React.PointerEvent<HTMLDivElement>, pId: string) => {
+    if (!onSwapPlayers || seatDragCandidateId.current !== pId) return;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // fallback
+    }
+
+    const dist = Math.hypot(
+      e.clientX - seatPointerStartPos.current.x,
+      e.clientY - seatPointerStartPos.current.y
+    );
+
+    if (dist > 8 && draggingSeatPlayerId === pId) {
+      // Drag & drop finished
+      if (hoverSeatPlayerId && hoverSeatPlayerId !== pId) {
+        onSwapPlayers(pId, hoverSeatPlayerId);
+        setSwapSourcePlayerId(null);
+      }
+    } else {
+      // Clean tap / click
+      if (swapSourcePlayerId === null) {
+        setSwapSourcePlayerId(pId);
+      } else if (swapSourcePlayerId === pId) {
+        setSwapSourcePlayerId(null);
+      } else {
+        onSwapPlayers(swapSourcePlayerId, pId);
+        setSwapSourcePlayerId(null);
+      }
+    }
+
+    seatDragCandidateId.current = null;
+    setDraggingSeatPlayerId(null);
+    setDragSeatCoords(null);
+    setHoverSeatPlayerId(null);
   };
 
   const getRoleBadge = (player: Player) => {
@@ -350,6 +448,9 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
       {viewMode === 'circle' && (
         <div
           ref={circleContainerRef}
+          onClick={() => {
+            if (swapSourcePlayerId) setSwapSourcePlayerId(null);
+          }}
           className="relative w-full max-w-[340px] xs:max-w-[380px] sm:max-w-[420px] aspect-square mx-auto my-2 select-none"
         >
           {/* Table Center Graphic */}
@@ -372,10 +473,49 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
                 <span>{restlessSpirits.length} Spirits</span>
               </div>
             )}
+            {onSwapPlayers && (
+              <div className="flex items-center gap-1 mt-1 text-[8px] sm:text-[9px] text-amber-300/80 font-medium">
+                <ArrowUpDown className="w-2.5 h-2.5" />
+                <span>Tap or drag seats to swap</span>
+              </div>
+            )}
             <span className="text-[9px] text-zinc-500 italic mt-0.5">Clockwise ➔</span>
           </div>
 
-          {/* Drag Hover Snap Banner */}
+          {/* Seat Dragging Hover Banner */}
+          {draggingSeatPlayerId !== null && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-35 px-3 py-1 rounded-full bg-emerald-950/95 border border-emerald-400 text-[10px] sm:text-xs text-emerald-200 font-bold shadow-[0_0_18px_rgba(52,211,153,0.8)] pointer-events-none whitespace-nowrap animate-pulse flex items-center gap-1.5">
+              <ArrowUpDown className="w-3.5 h-3.5 text-emerald-300" />
+              <span>
+                {hoverSeatPlayerId
+                  ? `Drop to swap with ${players.find(p => p.id === hoverSeatPlayerId)?.name || 'Seat'}`
+                  : 'Drag onto another seat to swap'}
+              </span>
+            </div>
+          )}
+
+          {/* Seat Tap-to-Swap Banner */}
+          {swapSourcePlayerId !== null && draggingSeatPlayerId === null && (() => {
+            const sourceP = players.find(p => p.id === swapSourcePlayerId);
+            return (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-35 px-3 py-1 rounded-full bg-amber-950/95 border border-amber-400 text-[10px] sm:text-xs text-amber-200 font-bold shadow-[0_0_18px_rgba(251,191,36,0.8)] flex items-center gap-2 whitespace-nowrap">
+                <ArrowUpDown className="w-3.5 h-3.5 text-amber-300 animate-bounce" />
+                <span>Tap a seat to swap with {sourceP?.name || `Seat ${sourceP?.seat}`}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSwapSourcePlayerId(null);
+                  }}
+                  className="ml-1 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            );
+          })()}
+
+          {/* Drag Hover Snap Banner (Spirits) */}
           {draggingSpiritIdx !== null && hoverGap && (
             <div className="absolute top-2 left-1/2 -translate-x-1/2 z-35 px-2.5 py-1 rounded-full bg-purple-950/95 border border-purple-400 text-[10px] text-purple-200 font-bold shadow-[0_0_15px_rgba(168,85,247,0.8)] pointer-events-none whitespace-nowrap animate-pulse flex items-center gap-1.5">
               <Ghost className="w-3 h-3 text-purple-300" />
@@ -428,19 +568,47 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
             const y = 50 + radius * Math.sin(angle);
             const pColor = getPlayerColor(p.colorId);
             const isSelected = selectedPlayerId === p.id;
+            const isSwapSource = swapSourcePlayerId === p.id;
+            const isDraggingThis = draggingSeatPlayerId === p.id;
+            const isHoverTarget = hoverSeatPlayerId === p.id;
+            const isSwapTarget = swapSourcePlayerId !== null && swapSourcePlayerId !== p.id;
 
             return (
               <div
                 key={p.id}
-                onClick={() => onSelectPlayer && onSelectPlayer(p)}
+                onPointerDown={(e) => handleSeatPointerDown(e, p.id)}
+                onPointerMove={(e) => handleSeatPointerMove(e, p.id)}
+                onPointerUp={(e) => handleSeatPointerUp(e, p.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!onSwapPlayers && onSelectPlayer) {
+                    onSelectPlayer(p);
+                  }
+                }}
                 style={{
                   left: `${x}%`,
                   top: `${y}%`,
                   transform: 'translate(-50%, -50%)',
                 }}
-                className={`absolute z-10 flex flex-col items-center transition-all ${
-                  interactive ? 'cursor-pointer hover:scale-110' : ''
-                } ${isSelected ? 'scale-115 ring-2 ring-rose-400 rounded-full' : ''}`}
+                className={`absolute z-10 flex flex-col items-center transition-all select-none ${
+                  onSwapPlayers
+                    ? 'touch-none cursor-grab active:cursor-grabbing'
+                    : interactive
+                    ? 'cursor-pointer hover:scale-110'
+                    : ''
+                } ${
+                  isDraggingThis
+                    ? 'opacity-30 scale-90 pointer-events-none'
+                    : isHoverTarget
+                    ? 'scale-125 z-30'
+                    : isSwapSource
+                    ? 'scale-120 z-30'
+                    : isSwapTarget
+                    ? 'hover:scale-120 cursor-pointer'
+                    : isSelected
+                    ? 'scale-115 ring-2 ring-rose-400 rounded-full'
+                    : ''
+                }`}
               >
                 {/* Seat Avatar Bubble */}
                 <div
@@ -448,7 +616,15 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
                     backgroundColor: pColor.hex,
                     borderColor: pColor.borderHex || 'rgba(255,255,255,0.2)',
                   }}
-                  className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 flex items-center justify-center shadow-md shadow-black/60 transition-transform"
+                  className={`relative w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 flex items-center justify-center shadow-md shadow-black/60 transition-all ${
+                    isHoverTarget
+                      ? 'ring-4 ring-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.9)]'
+                      : isSwapSource
+                      ? 'ring-4 ring-amber-400 ring-offset-2 ring-offset-zinc-950 shadow-[0_0_20px_rgba(251,191,36,0.9)] animate-pulse'
+                      : isSwapTarget
+                      ? 'hover:ring-2 hover:ring-amber-300'
+                      : ''
+                  }`}
                 >
                   {/* Role Mini Badge */}
                   <div className="absolute -top-1.5 -right-1.5">
@@ -502,6 +678,38 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
               </div>
             );
           })}
+
+          {/* Dragging Seat Floating Avatar Preview */}
+          {draggingSeatPlayerId && dragSeatCoords && (() => {
+            const draggedPlayer = players.find(p => p.id === draggingSeatPlayerId);
+            if (!draggedPlayer) return null;
+            const dColor = getPlayerColor(draggedPlayer.colorId);
+            return (
+              <div
+                style={{
+                  left: `${dragSeatCoords.x}%`,
+                  top: `${dragSeatCoords.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+                className="absolute z-40 pointer-events-none flex flex-col items-center select-none"
+              >
+                <div
+                  style={{
+                    backgroundColor: dColor.hex,
+                    borderColor: dColor.borderHex || 'rgba(255,255,255,0.4)',
+                  }}
+                  className="w-10 h-10 rounded-full border-2 flex items-center justify-center shadow-[0_0_25px_rgba(0,0,0,0.9)] ring-2 ring-white/60 animate-pulse"
+                >
+                  <div className="absolute -top-1.5 -right-1.5">
+                    {getRoleBadge(draggedPlayer)}
+                  </div>
+                </div>
+                <div className="mt-1 bg-black/90 px-2 py-0.5 rounded text-[10px] text-white font-bold border border-zinc-700 shadow-md whitespace-nowrap">
+                  {draggedPlayer.name || `P${draggedPlayer.seat}`}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Restless Spirits placed between seats on circular table */}
           {restlessSpirits.map((spirit, sIdx) => {
@@ -629,80 +837,140 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
 
       {/* List View */}
       {viewMode === 'list' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[360px] overflow-y-auto pr-1">
-          {players.map((p, pIdx) => {
-            const pColor = getPlayerColor(p.colorId);
-            const isSelected = selectedPlayerId === p.id;
-            const nextSeat = (p.seat % total) + 1;
-            const spiritsBetween = restlessSpirits.filter(
-              s => (s.betweenSeatA === p.seat && s.betweenSeatB === nextSeat) ||
-                   (s.betweenSeatB === p.seat && s.betweenSeatA === nextSeat)
-            );
-
+        <div className="space-y-2">
+          {swapSourcePlayerId !== null && (() => {
+            const sourceP = players.find(p => p.id === swapSourcePlayerId);
             return (
-              <React.Fragment key={p.id}>
-                <div
-                  onClick={() => onSelectPlayer && onSelectPlayer(p)}
-                  className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
-                    isSelected
-                      ? 'bg-rose-950/40 border-rose-600'
-                      : 'bg-zinc-900/60 border-zinc-800/80 hover:bg-zinc-800/50'
-                  } ${interactive ? 'cursor-pointer' : ''}`}
+              <div className="p-2 rounded-xl bg-amber-950/90 border border-amber-400 text-xs text-amber-200 font-bold flex items-center justify-between shadow-md">
+                <span className="flex items-center gap-1.5">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-amber-300 animate-bounce" />
+                  Tap another seat to swap with {sourceP?.name || `Seat ${sourceP?.seat}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSwapSourcePlayerId(null)}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 hover:text-white"
                 >
-                  <div className="flex items-center gap-2.5">
-                    {/* Seat badge with player color */}
-                    <div
-                      style={{
-                        backgroundColor: pColor.hex,
-                        borderColor: pColor.borderHex || 'rgba(255,255,255,0.2)',
-                      }}
-                      className="w-7 h-7 rounded-lg border flex items-center justify-center font-mono font-bold text-xs shadow-sm"
-                    >
-                      <span style={{ color: pColor.textColor }}>{p.seat}</span>
-                    </div>
+                  Cancel
+                </button>
+              </div>
+            );
+          })()}
 
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold text-zinc-100">
-                          {p.name || `Player ${p.seat}`}
-                        </span>
-                        <span className="text-[10px] text-zinc-400">({pColor.name})</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[360px] overflow-y-auto pr-1">
+            {players.map((p, pIdx) => {
+              const pColor = getPlayerColor(p.colorId);
+              const isSelected = selectedPlayerId === p.id;
+              const isSwapSource = swapSourcePlayerId === p.id;
+              const nextSeat = (p.seat % total) + 1;
+              const spiritsBetween = restlessSpirits.filter(
+                s => (s.betweenSeatA === p.seat && s.betweenSeatB === nextSeat) ||
+                     (s.betweenSeatB === p.seat && s.betweenSeatA === nextSeat)
+              );
+
+              return (
+                <React.Fragment key={p.id}>
+                  <div
+                    onClick={() => {
+                      if (onSwapPlayers) {
+                        if (swapSourcePlayerId === null) {
+                          setSwapSourcePlayerId(p.id);
+                        } else if (swapSourcePlayerId === p.id) {
+                          setSwapSourcePlayerId(null);
+                        } else {
+                          onSwapPlayers(swapSourcePlayerId, p.id);
+                          setSwapSourcePlayerId(null);
+                        }
+                      } else if (onSelectPlayer) {
+                        onSelectPlayer(p);
+                      }
+                    }}
+                    className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
+                      isSwapSource
+                        ? 'bg-amber-950/50 border-amber-400 ring-2 ring-amber-400 shadow-md'
+                        : isSelected
+                        ? 'bg-rose-950/40 border-rose-600'
+                        : 'bg-zinc-900/60 border-zinc-800/80 hover:bg-zinc-800/50'
+                    } ${interactive || onSwapPlayers ? 'cursor-pointer' : ''}`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {/* Seat badge with player color */}
+                      <div
+                        style={{
+                          backgroundColor: pColor.hex,
+                          borderColor: pColor.borderHex || 'rgba(255,255,255,0.2)',
+                        }}
+                        className="w-7 h-7 rounded-lg border flex items-center justify-center font-mono font-bold text-xs shadow-sm"
+                      >
+                        <span style={{ color: pColor.textColor }}>{p.seat}</span>
                       </div>
 
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[11px] text-zinc-300 font-medium">
-                          {getRoleLabel(p.role, p.hunterType)}
-                        </span>
-                        {p.isCorrupted && (
-                          <span className="text-[9px] bg-red-950 text-red-300 px-1 rounded border border-red-800">
-                            Corrupted
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-zinc-100">
+                            {p.name || `Player ${p.seat}`}
                           </span>
-                        )}
-                        {p.isPuppet && (
-                          <span className="text-[9px] bg-purple-950 text-purple-300 px-1 rounded border border-purple-800">
-                            Puppet
+                          <span className="text-[10px] text-zinc-400">({pColor.name})</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[11px] text-zinc-300 font-medium">
+                            {getRoleLabel(p.role, p.hunterType)}
                           </span>
-                        )}
+                          {p.isCorrupted && (
+                            <span className="text-[9px] bg-red-950 text-red-300 px-1 rounded border border-red-800">
+                              Corrupted
+                            </span>
+                          )}
+                          {p.isPuppet && (
+                            <span className="text-[9px] bg-purple-950 text-purple-300 px-1 rounded border border-purple-800">
+                              Puppet
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-0.5">
-                      {Array.from({ length: 3 }).map((_, i) => (
-                        <Heart
-                          key={i}
-                          className={`w-3 h-3 ${
-                            i < p.heartsRemaining
-                              ? 'fill-rose-500 text-rose-500'
-                              : 'fill-zinc-800 text-zinc-700'
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-0.5">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <Heart
+                            key={i}
+                            className={`w-3 h-3 ${
+                              i < p.heartsRemaining
+                                ? 'fill-rose-500 text-rose-500'
+                                : 'fill-zinc-800 text-zinc-700'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <div>{getRoleBadge(p)}</div>
+                      {onSwapPlayers && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (swapSourcePlayerId === p.id) {
+                              setSwapSourcePlayerId(null);
+                            } else if (swapSourcePlayerId === null) {
+                              setSwapSourcePlayerId(p.id);
+                            } else {
+                              onSwapPlayers(swapSourcePlayerId, p.id);
+                              setSwapSourcePlayerId(null);
+                            }
+                          }}
+                          className={`p-1 rounded-lg border transition-colors ${
+                            isSwapSource
+                              ? 'bg-amber-500 text-black border-amber-300'
+                              : 'bg-zinc-800/80 text-zinc-400 border-zinc-700 hover:text-amber-300 hover:border-amber-500'
                           }`}
-                        />
-                      ))}
+                          title="Swap seat with another player"
+                        >
+                          <ArrowUpDown className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
-                    <div>{getRoleBadge(p)}</div>
                   </div>
-                </div>
 
                 {spiritsBetween.map((spirit, sIdx) => {
                   const sPlayerA = players.find(x => x.seat === spirit.betweenSeatA);
@@ -745,6 +1013,7 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
               </React.Fragment>
             );
           })}
+          </div>
         </div>
       )}
     </div>

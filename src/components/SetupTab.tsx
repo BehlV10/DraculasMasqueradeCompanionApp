@@ -1,6 +1,6 @@
 import React from 'react';
 import { GameSettings, HunterType, Player, RoleType, RestlessSpirit } from '../types/game';
-import { GUEST_LIST_RULES, HUNTERS, OFFICIAL_COLORS } from '../data/gameData';
+import { GUEST_LIST_RULES, HUNTERS, OFFICIAL_COLORS, BASE_COLORS, VARIANT_COLORS } from '../data/gameData';
 import { SeatingChart } from './SeatingChart';
 import { Users, Shuffle, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 
@@ -29,10 +29,12 @@ export const SetupTab: React.FC<SetupTabProps> = ({
 
   // Change player count
   const handlePlayerCountChange = (count: number) => {
-    const newRule = GUEST_LIST_RULES[count];
-    // Adjust selected hunters if needed
+    const newRule = GUEST_LIST_RULES[count] || GUEST_LIST_RULES[8];
+    // Adjust selected hunters: strictly clamp to newRule.hunters
     let newHunters = [...settings.selectedHunters];
-    if (newHunters.length > newRule.hunters) {
+    if (newRule.hunters === 0) {
+      newHunters = [];
+    } else if (newHunters.length > newRule.hunters) {
       newHunters = newHunters.slice(0, newRule.hunters);
     } else if (newHunters.length < newRule.hunters) {
       const remaining = HUNTERS.map(h => h.id).filter(id => !newHunters.includes(id));
@@ -48,6 +50,7 @@ export const SetupTab: React.FC<SetupTabProps> = ({
     }));
 
     // Adjust players array
+    let adjusted: Player[] = [];
     if (players.length < count) {
       const added: Player[] = [];
       for (let i = players.length; i < count; i++) {
@@ -61,10 +64,52 @@ export const SetupTab: React.FC<SetupTabProps> = ({
           heartsRemaining: 3,
         });
       }
-      setPlayers([...players, ...added]);
-    } else if (players.length > count) {
-      setPlayers(players.slice(0, count));
+      adjusted = [...players, ...added];
+    } else {
+      adjusted = players.slice(0, count);
     }
+
+    // Sanitize existing player roles against newRule limits
+    let hunterCount = 0;
+    let brideCount = 0;
+    let draculaCount = 0;
+
+    adjusted = adjusted.map(p => {
+      let role = p.role;
+      let hunterType = p.hunterType;
+
+      if (role === 'dracula') {
+        if (draculaCount >= newRule.dracula) {
+          role = 'guest';
+        } else {
+          draculaCount++;
+        }
+      } else if (role === 'bride') {
+        if (brideCount >= newRule.brides) {
+          role = 'guest';
+        } else {
+          brideCount++;
+        }
+      } else if (role === 'hunter') {
+        if (newRule.hunters === 0 || hunterCount >= newRule.hunters) {
+          role = 'guest';
+          hunterType = undefined;
+        } else {
+          if (!hunterType || !newHunters.includes(hunterType)) {
+            hunterType = newHunters[hunterCount];
+          }
+          hunterCount++;
+        }
+      }
+
+      return {
+        ...p,
+        role,
+        hunterType,
+      };
+    });
+
+    setPlayers(adjusted);
   };
 
   // Toggle Hunter inclusion
@@ -93,6 +138,30 @@ export const SetupTab: React.FC<SetupTabProps> = ({
     });
   };
 
+  // Swap physical positions / profiles of two players on the circular table (BOTC style)
+  const handleSwapPlayers = (playerAId: string, playerBId: string) => {
+    if (playerAId === playerBId) return;
+    setPlayers(prev => {
+      const idxA = prev.findIndex(p => p.id === playerAId);
+      const idxB = prev.findIndex(p => p.id === playerBId);
+      if (idxA === -1 || idxB === -1) return prev;
+
+      const copy = [...prev];
+      const pA = copy[idxA];
+      const pB = copy[idxB];
+
+      copy[idxA] = {
+        ...pB,
+        seat: pA.seat,
+      };
+      copy[idxB] = {
+        ...pA,
+        seat: pB.seat,
+      };
+      return copy;
+    });
+  };
+
   // Auto-Deal / Randomize Roles to seats
   const autoDealRoles = () => {
     const rolesPool: { role: RoleType; hunterType?: HunterType }[] = [];
@@ -100,9 +169,11 @@ export const SetupTab: React.FC<SetupTabProps> = ({
     for (let i = 0; i < currentRule.brides; i++) {
       rolesPool.push({ role: 'bride' });
     }
-    settings.selectedHunters.forEach(hId => {
-      rolesPool.push({ role: 'hunter', hunterType: hId });
-    });
+    if (currentRule.hunters > 0) {
+      settings.selectedHunters.slice(0, currentRule.hunters).forEach(hId => {
+        rolesPool.push({ role: 'hunter', hunterType: hId });
+      });
+    }
     for (let i = 0; i < currentRule.guests; i++) {
       rolesPool.push({ role: 'guest' });
     }
@@ -252,6 +323,7 @@ export const SetupTab: React.FC<SetupTabProps> = ({
         interactive
         narratorAngle={narratorAngle}
         onUpdateNarratorAngle={onUpdateNarratorAngle}
+        onSwapPlayers={handleSwapPlayers}
       />
 
       {/* 4. Player Roster & Role Assignment */}
@@ -262,7 +334,7 @@ export const SetupTab: React.FC<SetupTabProps> = ({
               Step 2: Assign Seats & Secret Roles
             </h2>
             <p className="text-[11px] text-zinc-400">
-              Record player names, colors, and their dealt role.
+              Record player names, colors, and their dealt role. Tap or drag seats on the circular table to swap seating positions.
             </p>
           </div>
 
@@ -304,11 +376,20 @@ export const SetupTab: React.FC<SetupTabProps> = ({
                     onChange={e => updatePlayer(idx, { colorId: e.target.value })}
                     className="bg-zinc-900 border border-zinc-700/80 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-rose-500 font-medium"
                   >
-                    {OFFICIAL_COLORS.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
+                    <optgroup label="Standard Colors">
+                      {BASE_COLORS.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Dark / Light Shades">
+                      {VARIANT_COLORS.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
 

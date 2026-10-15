@@ -190,16 +190,20 @@ export function App() {
 
   const confirmReset = () => {
     const newCount = gameState.settings.playerCount || 8;
+    const rule = GUEST_LIST_RULES[newCount] || GUEST_LIST_RULES[8];
     const freshState: GameState = {
       ...defaultInitialState,
       settings: {
         ...defaultSettings,
         playerCount: newCount,
+        selectedHunters: defaultSettings.selectedHunters.slice(0, rule.hunters),
+        explorationTimeMinutes: rule.explorationTime,
+        finaleTimeMinutes: rule.finaleTime,
       },
       players: createDefaultPlayers(newCount),
     };
     setGameState(freshState);
-    handleResetTimer(defaultSettings.explorationTimeMinutes);
+    handleResetTimer(rule.explorationTime);
     setActiveTab('setup');
     setShowResetConfirm(false);
   };

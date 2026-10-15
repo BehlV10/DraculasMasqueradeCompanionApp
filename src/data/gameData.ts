@@ -18,6 +18,31 @@ export const OFFICIAL_COLORS: PlayerColor[] = [
   { id: 'dark_red', name: 'D. Red', hex: '#881337', textColor: '#ffffff' },
 ];
 
+// Standard base colors sorted alphabetically (Black, Blue, Gray, Green, Orange, Pink, Purple, Red, White, Yellow)
+export const BASE_COLORS: PlayerColor[] = [
+  { id: 'black', name: 'Black', hex: '#18181b', borderHex: '#52525b', textColor: '#ffffff' },
+  { id: 'blue', name: 'Blue', hex: '#2563eb', textColor: '#ffffff' },
+  { id: 'gray', name: 'Gray', hex: '#64748b', textColor: '#ffffff' },
+  { id: 'green', name: 'Green', hex: '#16a34a', textColor: '#ffffff' },
+  { id: 'orange', name: 'Orange', hex: '#f97316', textColor: '#ffffff' },
+  { id: 'pink', name: 'Pink', hex: '#f472b6', textColor: '#0f172a' },
+  { id: 'purple', name: 'Purple', hex: '#9333ea', textColor: '#ffffff' },
+  { id: 'red', name: 'Red', hex: '#dc2626', textColor: '#ffffff' },
+  { id: 'white', name: 'White', hex: '#f8fafc', borderHex: '#94a3b8', textColor: '#0f172a' },
+  { id: 'yellow', name: 'Yellow', hex: '#eab308', textColor: '#000000' },
+];
+
+// Shade / light & dark variants grouped at bottom
+export const VARIANT_COLORS: PlayerColor[] = [
+  { id: 'dark_blue', name: 'D. Blue', hex: '#1e3a8a', textColor: '#ffffff' },
+  { id: 'dark_red', name: 'D. Red', hex: '#881337', textColor: '#ffffff' },
+  { id: 'light_blue', name: 'L. Blue', hex: '#38bdf8', textColor: '#000000' },
+  { id: 'light_green', name: 'L. Green', hex: '#86efac', textColor: '#0f172a' },
+  { id: 'light_purple', name: 'L. Purple', hex: '#c084fc', textColor: '#000000' },
+];
+
+export const SORTED_COLORS: PlayerColor[] = [...BASE_COLORS, ...VARIANT_COLORS];
+
 export interface RosterRule {
   players: number;
   dracula: number;
