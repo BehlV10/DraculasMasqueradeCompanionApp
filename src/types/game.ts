@@ -113,4 +113,5 @@ export interface GameState {
   draculaGuessedHunterIds: string[];
   winner: 'good' | 'evil' | null;
   winReason?: string;
+  narratorAngle?: number; // radians around table, default Math.PI / 2 (6 o'clock)
 }

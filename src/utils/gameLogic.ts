@@ -440,14 +440,21 @@ export function computeRoomAnswer(
 
     case 'multi2_distance_closest_evil': {
       if (!dracula) return { trueAnswer: '1', recommendedLie: '2', lieReasoning: '' };
-      const dracSeat = dracula.seat - 1;
+      const entities = getSeatedEntities(gameState);
+      const m = entities.length;
+      const dracIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === dracula.id);
       let minDistance = 999;
-      players.forEach((p, idx) => {
-        if (p.id !== dracula.id && getPlayerRegisteredTeam(p) === 'evil') {
-          const dist = getShortestDistance(dracSeat, idx, n);
-          if (dist < minDistance) minDistance = dist;
-        }
-      });
+      if (dracIdx !== -1) {
+        entities.forEach((ent, idx) => {
+          if (idx !== dracIdx && ent.alignment === 'evil') {
+            const cw = (idx - dracIdx + m) % m;
+            const ccw = (dracIdx - idx + m) % m;
+            const dist = Math.min(cw, ccw);
+            if (dist < minDistance) minDistance = dist;
+          }
+        });
+      }
+      if (minDistance === 999) minDistance = 1;
       const trueAns = minDistance >= 9 ? '9+' : String(minDistance);
       const lie = minDistance === 1 ? '2' : '1';
       return {
@@ -513,13 +520,17 @@ export function computeRoomAnswer(
 
     case 'multi2_first_evil_cw': {
       if (!dracula) return { trueAnswer: '1', recommendedLie: '2', lieReasoning: '' };
-      const dracSeat = dracula.seat - 1;
+      const entities = getSeatedEntities(gameState);
+      const m = entities.length;
+      const dracIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === dracula.id);
       let firstDist = 1;
-      for (let step = 1; step < n; step++) {
-        const checkSeat = (dracSeat + step) % n;
-        if (getPlayerRegisteredTeam(players[checkSeat]) === 'evil') {
-          firstDist = step;
-          break;
+      if (dracIdx !== -1) {
+        for (let step = 1; step < m; step++) {
+          const checkIdx = (dracIdx + step) % m;
+          if (entities[checkIdx].alignment === 'evil') {
+            firstDist = step;
+            break;
+          }
         }
       }
       const trueAns = firstDist >= 9 ? '9+' : String(firstDist);
@@ -541,17 +552,21 @@ export function computeRoomAnswer(
     }
 
     case 'multi2_evil_closer_cw_ccw': {
-      const mySeat = leaderSeat;
+      const entities = getSeatedEntities(gameState);
+      const m = entities.length;
+      const leaderIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === leader.id);
       let closestCW = 999;
       let closestCCW = 999;
-      players.forEach((p, idx) => {
-        if (idx !== mySeat && getPlayerRegisteredTeam(p) === 'evil') {
-          const cw = getClockwiseDistance(mySeat, idx, n);
-          const ccw = getCounterClockwiseDistance(mySeat, idx, n);
-          if (cw < closestCW) closestCW = cw;
-          if (ccw < closestCCW) closestCCW = ccw;
-        }
-      });
+      if (leaderIdx !== -1) {
+        entities.forEach((ent, idx) => {
+          if (idx !== leaderIdx && ent.alignment === 'evil') {
+            const cw = (idx - leaderIdx + m) % m;
+            const ccw = (leaderIdx - idx + m) % m;
+            if (cw < closestCW) closestCW = cw;
+            if (ccw < closestCCW) closestCCW = ccw;
+          }
+        });
+      }
       const trueAns = closestCW <= closestCCW ? 'Clockwise' : 'Counter Clockwise';
       const lie = trueAns === 'Clockwise' ? 'Counter Clockwise' : 'Clockwise';
       return {
@@ -563,12 +578,16 @@ export function computeRoomAnswer(
 
     case 'multi2_dracula_evil_neighbors': {
       if (!dracula) return { trueAnswer: '0', recommendedLie: '1', lieReasoning: '' };
-      const dracSeat = dracula.seat - 1;
-      const left = (dracSeat - 1 + n) % n;
-      const right = (dracSeat + 1) % n;
+      const entities = getSeatedEntities(gameState);
+      const m = entities.length;
+      const dracIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === dracula.id);
       let count = 0;
-      if (getPlayerRegisteredTeam(players[left]) === 'evil') count++;
-      if (getPlayerRegisteredTeam(players[right]) === 'evil') count++;
+      if (dracIdx !== -1) {
+        const left = (dracIdx - 1 + m) % m;
+        const right = (dracIdx + 1) % m;
+        if (entities[left].alignment === 'evil') count++;
+        if (entities[right].alignment === 'evil') count++;
+      }
       const trueAns = String(count);
       const lie = count === 0 ? '1' : '0';
       return {
@@ -580,10 +599,14 @@ export function computeRoomAnswer(
 
     case 'multi2_sitting_next_to_dracula': {
       if (!dracula) return { trueAnswer: 'No', recommendedLie: 'Yes', lieReasoning: '' };
-      const dracSeat = dracula.seat - 1;
+      const entities = getSeatedEntities(gameState);
+      const m = entities.length;
+      const dracIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === dracula.id);
       const nextTo = participants.some(p => {
-        const s = p.seat - 1;
-        return getShortestDistance(s, dracSeat, n) === 1;
+        const pIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === p.id);
+        if (pIdx === -1 || dracIdx === -1) return false;
+        const dist = Math.min((pIdx - dracIdx + m) % m, (dracIdx - pIdx + m) % m);
+        return dist === 1;
       });
       return {
         trueAnswer: nextTo ? 'Yes' : 'No',
@@ -594,13 +617,17 @@ export function computeRoomAnswer(
 
     case 'multi2_first_evil_ccw': {
       if (!dracula) return { trueAnswer: '1', recommendedLie: '2', lieReasoning: '' };
-      const dracSeat = dracula.seat - 1;
+      const entities = getSeatedEntities(gameState);
+      const m = entities.length;
+      const dracIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === dracula.id);
       let firstDist = 1;
-      for (let step = 1; step < n; step++) {
-        const checkSeat = (dracSeat - step + n) % n;
-        if (getPlayerRegisteredTeam(players[checkSeat]) === 'evil') {
-          firstDist = step;
-          break;
+      if (dracIdx !== -1) {
+        for (let step = 1; step < m; step++) {
+          const checkIdx = (dracIdx - step + m) % m;
+          if (entities[checkIdx].alignment === 'evil') {
+            firstDist = step;
+            break;
+          }
         }
       }
       const trueAns = firstDist >= 9 ? '9+' : String(firstDist);
@@ -613,11 +640,16 @@ export function computeRoomAnswer(
     }
 
     case 'multi2_my_evil_neighbors': {
-      const left = (leaderSeat - 1 + n) % n;
-      const right = (leaderSeat + 1) % n;
+      const entities = getSeatedEntities(gameState);
+      const m = entities.length;
+      const leaderIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === leader.id);
       let count = 0;
-      if (getPlayerRegisteredTeam(players[left]) === 'evil') count++;
-      if (getPlayerRegisteredTeam(players[right]) === 'evil') count++;
+      if (leaderIdx !== -1) {
+        const left = (leaderIdx - 1 + m) % m;
+        const right = (leaderIdx + 1) % m;
+        if (entities[left].alignment === 'evil') count++;
+        if (entities[right].alignment === 'evil') count++;
+      }
       const trueAns = String(count);
       const lie = count === 0 ? '1' : '0';
       return {
@@ -628,45 +660,61 @@ export function computeRoomAnswer(
     }
 
     case 'multi2_two_left_evil': {
-      const l1 = (leaderSeat - 1 + n) % n;
-      const l2 = (leaderSeat - 2 + n) % n;
+      const entities = getSeatedEntities(gameState);
+      const m = entities.length;
+      const leaderIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === leader.id);
       let count = 0;
-      if (getPlayerRegisteredTeam(players[l1]) === 'evil') count++;
-      if (getPlayerRegisteredTeam(players[l2]) === 'evil') count++;
+      if (leaderIdx !== -1) {
+        const l1 = (leaderIdx - 1 + m) % m;
+        const l2 = (leaderIdx - 2 + m) % m;
+        if (entities[l1].alignment === 'evil') count++;
+        if (entities[l2].alignment === 'evil') count++;
+      }
       const trueAns = String(count);
       const lie = count === 0 ? '1' : '0';
       return {
         trueAnswer: trueAns,
         recommendedLie: lie,
-        lieReasoning: `True is ${trueAns}. Frame or clear the two players on the left.`,
+        lieReasoning: `True is ${trueAns}. Frame or clear the two entities on the left.`,
       };
     }
 
     case 'multi2_two_right_evil': {
-      const r1 = (leaderSeat + 1) % n;
-      const r2 = (leaderSeat + 2) % n;
+      const entities = getSeatedEntities(gameState);
+      const m = entities.length;
+      const leaderIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === leader.id);
       let count = 0;
-      if (getPlayerRegisteredTeam(players[r1]) === 'evil') count++;
-      if (getPlayerRegisteredTeam(players[r2]) === 'evil') count++;
+      if (leaderIdx !== -1) {
+        const r1 = (leaderIdx + 1) % m;
+        const r2 = (leaderIdx + 2) % m;
+        if (entities[r1].alignment === 'evil') count++;
+        if (entities[r2].alignment === 'evil') count++;
+      }
       const trueAns = String(count);
       const lie = count === 0 ? '1' : '0';
       return {
         trueAnswer: trueAns,
         recommendedLie: lie,
-        lieReasoning: `True is ${trueAns}. Frame or clear the two players on the right.`,
+        lieReasoning: `True is ${trueAns}. Frame or clear the two entities on the right.`,
       };
     }
 
     case 'multi2_distance_farthest_evil': {
       if (!dracula) return { trueAnswer: '2', recommendedLie: '3', lieReasoning: '' };
-      const dracSeat = dracula.seat - 1;
+      const entities = getSeatedEntities(gameState);
+      const m = entities.length;
+      const dracIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === dracula.id);
       let maxDist = 0;
-      players.forEach((p, idx) => {
-        if (p.id !== dracula.id && getPlayerRegisteredTeam(p) === 'evil') {
-          const dist = getShortestDistance(dracSeat, idx, n);
-          if (dist > maxDist) maxDist = dist;
-        }
-      });
+      if (dracIdx !== -1) {
+        entities.forEach((ent, idx) => {
+          if (idx !== dracIdx && ent.alignment === 'evil') {
+            const cw = (idx - dracIdx + m) % m;
+            const ccw = (dracIdx - idx + m) % m;
+            const dist = Math.min(cw, ccw);
+            if (dist > maxDist) maxDist = dist;
+          }
+        });
+      }
       const trueAns = maxDist >= 9 ? '9+' : String(maxDist);
       const lie = String(Math.max(1, maxDist - 1));
       return {
@@ -719,9 +767,16 @@ export function computeRoomAnswer(
 
     case 'multi3_dracula_closer_cw_ccw': {
       if (!dracula) return { trueAnswer: 'Clockwise', recommendedLie: 'Counter Clockwise', lieReasoning: '' };
-      const dracSeat = dracula.seat - 1;
-      const cw = getClockwiseDistance(leaderSeat, dracSeat, n);
-      const ccw = getCounterClockwiseDistance(leaderSeat, dracSeat, n);
+      const entities = getSeatedEntities(gameState);
+      const m = entities.length;
+      const leaderIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === leader.id);
+      const dracIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === dracula.id);
+      let cw = 0;
+      let ccw = 0;
+      if (leaderIdx !== -1 && dracIdx !== -1) {
+        cw = (dracIdx - leaderIdx + m) % m;
+        ccw = (leaderIdx - dracIdx + m) % m;
+      }
       const trueAns = cw <= ccw ? 'Clockwise' : 'Counter Clockwise';
       const lie = trueAns === 'Clockwise' ? 'Counter Clockwise' : 'Clockwise';
       return {
@@ -1045,4 +1100,47 @@ export function computeRoomAnswer(
         lieReasoning: 'Keep plausible; frame Good or exonerate Evil.',
       };
   }
+}
+
+/**
+ * Resolves question text placeholders ([Player], [Player A], [Player B], [1st/2nd/3rd/4th/5th], [X] or [Y], ___ seats)
+ * with actual player names, colors, and numeric parameters for history chronicle logs.
+ */
+export function resolveQuestionText(
+  template: string,
+  targetA?: Player,
+  targetB?: Player,
+  numericParam?: number
+): string {
+  let resolved = template;
+
+  const ordinalMap: Record<number, string> = {
+    1: '1st',
+    2: '2nd',
+    3: '3rd',
+    4: '4th',
+    5: '5th',
+  };
+
+  if (targetA) {
+    const color = getPlayerColor(targetA.colorId);
+    const labelA = `${targetA.name} (${color.name})`;
+    resolved = resolved.replace(/\[Player A\]/g, labelA);
+    resolved = resolved.replace(/\[Player\]/g, labelA);
+  }
+
+  if (targetB) {
+    const color = getPlayerColor(targetB.colorId);
+    const labelB = `${targetB.name} (${color.name})`;
+    resolved = resolved.replace(/\[Player B\]/g, labelB);
+  }
+
+  if (numericParam !== undefined) {
+    const ord = ordinalMap[numericParam] || `${numericParam}th`;
+    resolved = resolved.replace(/\[1st\/2nd\/3rd\/4th\/5th\]/g, ord);
+    resolved = resolved.replace(/\[X\] or \[Y\]/g, `#${numericParam}`);
+    resolved = resolved.replace(/___ seats/g, `${numericParam} seats`);
+  }
+
+  return resolved;
 }

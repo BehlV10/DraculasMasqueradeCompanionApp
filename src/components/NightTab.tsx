@@ -606,6 +606,8 @@ export const NightTab: React.FC<NightTabProps> = ({
                 onUpdateSpirit={handleUpdateSpirit}
                 activeSpiritIndex={selectedSpiritIdx}
                 onSelectSpiritIndex={setSelectedSpiritIdx}
+                narratorAngle={gameState.narratorAngle}
+                onUpdateNarratorAngle={angle => setGameState(prev => ({ ...prev, narratorAngle: angle }))}
               />
             </div>
           </div>

@@ -10,6 +10,8 @@ interface SetupTabProps {
   players: Player[];
   setPlayers: React.Dispatch<React.SetStateAction<Player[]>>;
   restlessSpirits?: RestlessSpirit[];
+  narratorAngle?: number;
+  onUpdateNarratorAngle?: (angle: number) => void;
   onStartNight: () => void;
 }
 
@@ -19,6 +21,8 @@ export const SetupTab: React.FC<SetupTabProps> = ({
   players,
   setPlayers,
   restlessSpirits,
+  narratorAngle,
+  onUpdateNarratorAngle,
   onStartNight,
 }) => {
   const currentRule = GUEST_LIST_RULES[settings.playerCount] || GUEST_LIST_RULES[8];
@@ -242,7 +246,13 @@ export const SetupTab: React.FC<SetupTabProps> = ({
       )}
 
       {/* 3. Seating Chart Visualization */}
-      <SeatingChart players={players} restlessSpirits={restlessSpirits} interactive />
+      <SeatingChart
+        players={players}
+        restlessSpirits={restlessSpirits}
+        interactive
+        narratorAngle={narratorAngle}
+        onUpdateNarratorAngle={onUpdateNarratorAngle}
+      />
 
       {/* 4. Player Roster & Role Assignment */}
       <div className="bg-[#10111d] rounded-2xl border border-rose-950/40 p-3 sm:p-4">

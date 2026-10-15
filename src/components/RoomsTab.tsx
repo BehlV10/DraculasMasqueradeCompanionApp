@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { GameState, Player, RoomHeartCount, RoomLogEntry, RoomCardDefinition, RoomCardCategory } from '../types/game';
 import { ROOM_CARDS, ROOM_CATEGORIES } from '../data/gameData';
-import { computeRoomAnswer, getPlayerColor, isEvilRole } from '../utils/gameLogic';
+import { computeRoomAnswer, getPlayerColor, isEvilRole, resolveQuestionText } from '../utils/gameLogic';
 import { playFailSound, playPassSound } from '../utils/sound';
 import { TimerWidget } from './TimerWidget';
 import { SeatingChart } from './SeatingChart';
@@ -30,12 +30,21 @@ interface RoomsTabProps {
   gameState: GameState;
   setGameState: React.Dispatch<React.SetStateAction<GameState>>;
   onAdvanceToFinale: () => void;
+  explorationTimer?: {
+    secondsRemaining: number;
+    isRunning: boolean;
+    onStart: () => void;
+    onPause: () => void;
+    onReset: (mins?: number) => void;
+    onAddMinutes: (mins: number) => void;
+  };
 }
 
 export const RoomsTab: React.FC<RoomsTabProps> = ({
   gameState,
   setGameState,
   onAdvanceToFinale,
+  explorationTimer,
 }) => {
   const { players, roomsHistory, settings } = gameState;
   const currentRoomNumber = roomsHistory.length + 1;
@@ -64,9 +73,11 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<'all' | RoomCardCategory>('all');
   const [modalCategoryFilter, setModalCategoryFilter] = useState<'all' | RoomCardCategory>('all');
 
-  // Cards available for current room hearts
+  // Cards available for current room hearts (Alphabetized by question)
   const cardsForCurrentHearts = useMemo(() => {
-    return ROOM_CARDS.filter(c => c.hearts === hearts);
+    return [...ROOM_CARDS.filter(c => c.hearts === hearts)].sort((a, b) =>
+      a.question.localeCompare(b.question)
+    );
   }, [hearts]);
 
   // Categories available for current room hearts
@@ -76,11 +87,13 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
     );
   }, [cardsForCurrentHearts]);
 
-  // Questions available given selected hearts & selected category
+  // Questions available given selected hearts & selected category (Alphabetized)
   const availableQuestionsForCategory = useMemo(() => {
-    if (selectedCategory === 'all') return cardsForCurrentHearts;
-    const filtered = cardsForCurrentHearts.filter(c => c.category === selectedCategory);
-    return filtered.length > 0 ? filtered : cardsForCurrentHearts;
+    const pool = selectedCategory === 'all'
+      ? cardsForCurrentHearts
+      : cardsForCurrentHearts.filter(c => c.category === selectedCategory);
+    const validPool = pool.length > 0 ? pool : cardsForCurrentHearts;
+    return [...validPool].sort((a, b) => a.question.localeCompare(b.question));
   }, [cardsForCurrentHearts, selectedCategory]);
 
   const handleSelectCategory = (catId: 'all' | RoomCardCategory) => {
@@ -100,17 +113,21 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
     setIsCardPickerOpen(true);
   };
 
-  // When hearts count changes, ensure participantIds count matches
+  // When hearts count changes, ensure participantIds count matches (Solo room: strictly 1 participant)
   const handleHeartsChange = (newHearts: RoomHeartCount) => {
     setHearts(newHearts);
-    const newParticipants: string[] = [leaderId];
-    for (const p of players) {
-      if (newParticipants.length >= newHearts) break;
-      if (!newParticipants.includes(p.id)) {
-        newParticipants.push(p.id);
+    if (newHearts === 1) {
+      setParticipantIds([leaderId]);
+    } else {
+      const newParticipants: string[] = [leaderId];
+      for (const p of players) {
+        if (newParticipants.length >= newHearts) break;
+        if (!newParticipants.includes(p.id)) {
+          newParticipants.push(p.id);
+        }
       }
+      setParticipantIds(newParticipants);
     }
-    setParticipantIds(newParticipants);
 
     // If currently selected category has no cards for new heart tier, reset to 'all'
     const newHeartsCards = ROOM_CARDS.filter(c => c.hearts === newHearts);
@@ -156,6 +173,10 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
   const handleLeaderChange = (newLeaderId: string) => {
     setLeaderId(newLeaderId);
+    if (hearts === 1) {
+      setParticipantIds([newLeaderId]);
+      return;
+    }
     if (!participantIds.includes(newLeaderId)) {
       setParticipantIds([newLeaderId, ...participantIds.slice(1, hearts)]);
     } else {
@@ -165,6 +186,11 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   };
 
   const toggleParticipant = (pId: string) => {
+    if (hearts === 1) {
+      // In solo room, clicking any player makes them the sole explorer
+      handleLeaderChange(pId);
+      return;
+    }
     if (pId === leaderId) return; // Leader cannot be removed
     if (participantIds.includes(pId)) {
       if (participantIds.length > 1) {
@@ -254,9 +280,9 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
     return ROOM_CARDS.filter(c => c.hearts === cardHeartFilter);
   }, [cardHeartFilter]);
 
-  // Real-time keyword, heart & category search logic for modal
+  // Real-time keyword, heart & category search logic for modal (Alphabetized)
   const filteredCards = useMemo(() => {
-    return ROOM_CARDS.filter(card => {
+    const list = ROOM_CARDS.filter(card => {
       // Heart count filter
       if (cardHeartFilter !== 'all' && card.hearts !== cardHeartFilter) {
         return false;
@@ -275,13 +301,14 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
       }
       return true;
     });
+    return [...list].sort((a, b) => a.question.localeCompare(b.question));
   }, [cardHeartFilter, modalCategoryFilter, questionSearch]);
 
-  // Grouped cards for the modal when browsing all categories without a search query
+  // Grouped cards for the modal when browsing all categories without a search query (Alphabetized)
   const modalCategoryGroups = useMemo(() => {
     return ROOM_CATEGORIES.map(cat => ({
       cat,
-      cards: filteredCards.filter(c => c.category === cat.id),
+      cards: filteredCards.filter(c => c.category === cat.id).sort((a, b) => a.question.localeCompare(b.question)),
     })).filter(g => g.cards.length > 0);
   }, [filteredCards]);
 
@@ -309,7 +336,12 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
       rawVotes,
       outcome: finalOutcome,
       questionId: selectedQuestionId,
-      questionText: selectedQuestion?.question || customQuestionText || 'Custom Room Question',
+      questionText: resolveQuestionText(
+        selectedQuestion?.question || customQuestionText || 'Custom Room Question',
+        targetPlayerA,
+        targetPlayerB,
+        numericParam
+      ),
       calculatedTrueAnswer: answerAnalysis?.trueAnswer,
       suggestedLie: answerAnalysis?.recommendedLie,
       answerGiven: answerGiven || (finalOutcome === 'pass' ? answerAnalysis?.trueAnswer || 'Pass' : answerAnalysis?.recommendedLie || 'Fail'),
@@ -405,6 +437,12 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
       <TimerWidget
         label="Castle Exploration Timer"
         defaultMinutes={settings.explorationTimeMinutes}
+        secondsRemaining={explorationTimer?.secondsRemaining}
+        isRunning={explorationTimer?.isRunning}
+        onStart={explorationTimer?.onStart}
+        onPause={explorationTimer?.onPause}
+        onReset={explorationTimer?.onReset}
+        onAddMinutes={explorationTimer?.onAddMinutes}
         onTimeExpire={() => {}}
       />
 
@@ -467,6 +505,9 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
               <SeatingChart
                 players={players}
                 restlessSpirits={gameState.chosenBlessingId === 3 ? gameState.restlessSpirits : undefined}
+                interactive
+                narratorAngle={gameState.narratorAngle}
+                onUpdateNarratorAngle={angle => setGameState(prev => ({ ...prev, narratorAngle: angle }))}
               />
             </div>
           )}
@@ -568,15 +609,15 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
             </button>
           </div>
 
-          {/* Quick Topic / Category Filter Chips for current Heart tier */}
-          <div className="flex items-center gap-1.5 overflow-x-auto py-1 mb-2 scrollbar-none">
-            <span className="text-[10px] uppercase font-bold text-zinc-500 font-mono shrink-0 flex items-center gap-1 mr-0.5">
+          {/* Quick Topic / Category Filter Chips for current Heart tier (No horizontal scroll) */}
+          <div className="flex flex-wrap items-center gap-1.5 py-1 mb-2">
+            <span className="text-[10px] uppercase font-bold text-zinc-500 font-mono flex items-center gap-1 mr-0.5">
               <Tag className="w-3 h-3 text-rose-400" />
               Topic:
             </span>
             <button
               onClick={() => handleSelectCategory('all')}
-              className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
+              className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all ${
                 selectedCategory === 'all'
                   ? 'bg-zinc-200 text-black shadow-sm'
                   : 'bg-zinc-900/90 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
@@ -591,7 +632,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 <button
                   key={cat.id}
                   onClick={() => handleSelectCategory(cat.id)}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold transition-all ${
                     isSelected
                       ? cat.activeChipClass
                       : 'bg-zinc-900/90 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
@@ -753,9 +794,14 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
         {/* 2. Room Leader & Participants Selection */}
         <div className="space-y-2 mb-4">
-          <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider block">
-            Room Leader (★) & Participants ({participantIds.length}/{hearts})
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider block">
+              {hearts === 1 ? 'Solo Explorer (1 Player)' : `Room Leader (★) & Guests (${participantIds.length}/${hearts})`}
+            </label>
+            <span className="text-[11px] text-zinc-500">
+              {hearts === 1 ? 'Tap any player to explore solo' : 'Tap ★ for Leader, tap card for Guest'}
+            </span>
+          </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
             {players.map(p => {
@@ -767,13 +813,17 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 <div
                   key={p.id}
                   onClick={() => {
-                    if (isLeader) return;
-                    toggleParticipant(p.id);
+                    if (hearts === 1) {
+                      handleLeaderChange(p.id);
+                    } else {
+                      if (isLeader) return;
+                      toggleParticipant(p.id);
+                    }
                   }}
                   className={`p-2 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
                     isLeader
-                      ? 'bg-amber-950/50 border-amber-500 text-amber-200'
-                      : isParticipant
+                      ? 'bg-amber-950/50 border-amber-500 text-amber-200 shadow-sm'
+                      : isParticipant && hearts > 1
                       ? 'bg-rose-950/40 border-rose-600 text-rose-200'
                       : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:border-zinc-700'
                   }`}
@@ -791,20 +841,22 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleLeaderChange(p.id);
-                      }}
-                      title="Set as Room Leader"
-                      className={`text-[10px] px-1.5 py-0.5 rounded ${
-                        isLeader
-                          ? 'bg-amber-600 text-black font-bold'
-                          : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      ★
-                    </button>
+                    {hearts > 1 && (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          handleLeaderChange(p.id);
+                        }}
+                        title="Set as Room Leader"
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          isLeader
+                            ? 'bg-amber-600 text-black font-bold'
+                            : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        ★
+                      </button>
+                    )}
                     <span className="text-[10px] text-zinc-500 font-mono">
                       {p.heartsRemaining}♥
                     </span>

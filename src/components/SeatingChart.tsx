@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Player, RoleType, RestlessSpirit } from '../types/game';
 import { getPlayerColor } from '../utils/gameLogic';
 import { HUNTERS } from '../data/gameData';
-import { Heart, LayoutGrid, CircleDot, ShieldAlert, Sparkles, Ghost } from 'lucide-react';
+import { Heart, LayoutGrid, CircleDot, ShieldAlert, Sparkles, Ghost, BookOpen } from 'lucide-react';
 
 interface SeatingChartProps {
   players: Player[];
@@ -13,6 +13,8 @@ interface SeatingChartProps {
   onUpdateSpirit?: (index: number, updates: Partial<RestlessSpirit>) => void;
   activeSpiritIndex?: number | null;
   onSelectSpiritIndex?: (index: number) => void;
+  narratorAngle?: number;
+  onUpdateNarratorAngle?: (angle: number) => void;
 }
 
 export const SeatingChart: React.FC<SeatingChartProps> = ({
@@ -24,6 +26,8 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
   onUpdateSpirit,
   activeSpiritIndex,
   onSelectSpiritIndex,
+  narratorAngle = Math.PI / 2,
+  onUpdateNarratorAngle,
 }) => {
   const [viewMode, setViewMode] = useState<'circle' | 'list'>('circle');
   const [draggingSpiritIdx, setDraggingSpiritIdx] = useState<number | null>(null);
@@ -38,8 +42,53 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
     y: number;
   } | null>(null);
 
+  // Narrator drag state
+  const [isDraggingNarrator, setIsDraggingNarrator] = useState<boolean>(false);
+  const [dragNarratorAngle, setDragNarratorAngle] = useState<number | null>(null);
+
+  const localNarratorAngle = isDraggingNarrator && dragNarratorAngle !== null ? dragNarratorAngle : narratorAngle;
+
   const pointerStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const circleContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleNarratorPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingNarrator(true);
+    setDragNarratorAngle(narratorAngle);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // fallback
+    }
+  };
+
+  const handleNarratorPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingNarrator) return;
+    e.preventDefault();
+    const rect = circleContainerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+    setDragNarratorAngle(angle);
+  };
+
+  const handleNarratorPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingNarrator) return;
+    e.preventDefault();
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // fallback
+    }
+    const finalAngle = dragNarratorAngle !== null ? dragNarratorAngle : narratorAngle;
+    setIsDraggingNarrator(false);
+    setDragNarratorAngle(null);
+    if (onUpdateNarratorAngle) {
+      onUpdateNarratorAngle(finalAngle);
+    }
+  };
 
   const getRoleBadge = (player: Player) => {
     switch (player.role) {
@@ -401,14 +450,6 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
                   }}
                   className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 flex items-center justify-center shadow-md shadow-black/60 transition-transform"
                 >
-                  {/* Seat Number */}
-                  <span
-                    style={{ color: pColor.textColor }}
-                    className="font-bold text-xs font-mono drop-shadow-sm"
-                  >
-                    {p.seat}
-                  </span>
-
                   {/* Role Mini Badge */}
                   <div className="absolute -top-1.5 -right-1.5">
                     {getRoleBadge(p)}
@@ -541,6 +582,48 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
               </div>
             );
           })}
+
+          {/* Draggable Narrator Token */}
+          {(() => {
+            const angle = localNarratorAngle;
+            const narratorRadius = 42;
+            const nx = 50 + narratorRadius * Math.cos(angle);
+            const ny = 50 + narratorRadius * Math.sin(angle);
+
+            return (
+              <div
+                onPointerDown={handleNarratorPointerDown}
+                onPointerMove={handleNarratorPointerMove}
+                onPointerUp={handleNarratorPointerUp}
+                onPointerCancel={handleNarratorPointerUp}
+                style={{
+                  left: `${nx}%`,
+                  top: `${ny}%`,
+                  transform: 'translate(-50%, -50%)',
+                  transition: isDraggingNarrator ? 'none' : 'transform 0.15s ease',
+                }}
+                title="Narrator (Host) - Drag around the table to indicate where you are seated"
+                className={`absolute z-25 flex flex-col items-center select-none touch-none cursor-grab active:cursor-grabbing ${
+                  isDraggingNarrator ? 'z-50 scale-125' : 'hover:scale-115'
+                }`}
+              >
+                <div
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 flex items-center justify-center shadow-lg transition-transform ${
+                    isDraggingNarrator
+                      ? 'bg-zinc-600 border-zinc-200 text-white shadow-[0_0_16px_rgba(255,255,255,0.6)] ring-2 ring-zinc-300'
+                      : 'bg-zinc-700 hover:bg-zinc-600 border-zinc-400 text-zinc-100 shadow-black/80'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-zinc-200" />
+                </div>
+                <div className="mt-0.5 bg-black/90 backdrop-blur-sm px-1.5 py-0.2 rounded text-center border border-zinc-700 pointer-events-none">
+                  <p className="text-[8px] sm:text-[9px] text-zinc-300 font-bold uppercase tracking-wider leading-none">
+                    Narrator
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

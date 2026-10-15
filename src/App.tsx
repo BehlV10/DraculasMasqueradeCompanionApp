@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GamePhase, GameSettings, GameState, Player } from './types/game';
 import { GUEST_LIST_RULES, OFFICIAL_COLORS } from './data/gameData';
 import { Header } from './components/Header';
@@ -9,7 +9,7 @@ import { RoomsTab } from './components/RoomsTab';
 import { HistoryTab } from './components/HistoryTab';
 import { FinaleTab } from './components/FinaleTab';
 import { ReferenceTab } from './components/ReferenceTab';
-import { isSoundEnabled, toggleSound } from './utils/sound';
+import { isSoundEnabled, toggleSound, playBell, playTick } from './utils/sound';
 
 const STORAGE_KEY = 'dracula_masquerade_game_state_v1';
 
@@ -83,6 +83,7 @@ const defaultInitialState: GameState = {
   shotPlayerId: null,
   draculaGuessedHunterIds: [],
   winner: null,
+  narratorAngle: Math.PI / 2,
 };
 
 export function App() {
@@ -101,6 +102,73 @@ export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('setup');
   const [soundOn, setSoundOn] = useState<boolean>(true);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // Exploration Timer State (lifted so tab switches never wipe the clock)
+  const [explorationSeconds, setExplorationSeconds] = useState<number>(() => {
+    return (gameState.settings.explorationTimeMinutes || 20) * 60;
+  });
+  const [explorationRunning, setExplorationRunning] = useState<boolean>(false);
+  const timerEndRef = useRef<number | null>(null);
+
+  // Sync exploration timer if settings change when not running
+  useEffect(() => {
+    if (!explorationRunning) {
+      setExplorationSeconds((gameState.settings.explorationTimeMinutes || 20) * 60);
+    }
+  }, [gameState.settings.explorationTimeMinutes, explorationRunning]);
+
+  // Exploration timer ticker
+  useEffect(() => {
+    let interval: number | undefined;
+    if (explorationRunning) {
+      if (!timerEndRef.current) {
+        timerEndRef.current = Date.now() + explorationSeconds * 1000;
+      }
+      interval = window.setInterval(() => {
+        const remaining = Math.max(0, Math.round((timerEndRef.current! - Date.now()) / 1000));
+        setExplorationSeconds(remaining);
+        if (remaining <= 0) {
+          playBell();
+          setExplorationRunning(false);
+          timerEndRef.current = null;
+        } else if (remaining <= 11 && remaining > 1) {
+          playTick();
+        }
+      }, 1000);
+    } else {
+      timerEndRef.current = null;
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [explorationRunning]);
+
+  const handleStartTimer = () => {
+    timerEndRef.current = Date.now() + explorationSeconds * 1000;
+    setExplorationRunning(true);
+  };
+
+  const handlePauseTimer = () => {
+    setExplorationRunning(false);
+    timerEndRef.current = null;
+  };
+
+  const handleResetTimer = (mins?: number) => {
+    setExplorationRunning(false);
+    timerEndRef.current = null;
+    const targetMins = mins ?? gameState.settings.explorationTimeMinutes ?? 20;
+    setExplorationSeconds(targetMins * 60);
+  };
+
+  const handleAddTimerMinutes = (mins: number) => {
+    setExplorationSeconds(prev => {
+      const next = Math.max(0, prev + mins * 60);
+      if (timerEndRef.current) {
+        timerEndRef.current += mins * 60 * 1000;
+      }
+      return next;
+    });
+  };
 
   // Sync state to LocalStorage
   useEffect(() => {
@@ -131,6 +199,7 @@ export function App() {
       players: createDefaultPlayers(newCount),
     };
     setGameState(freshState);
+    handleResetTimer(defaultSettings.explorationTimeMinutes);
     setActiveTab('setup');
     setShowResetConfirm(false);
   };
@@ -160,6 +229,8 @@ export function App() {
         onToggleSound={handleToggleSound}
         onResetGame={handleResetGame}
         onOpenRules={() => setActiveTab('reference')}
+        timerSecondsRemaining={explorationRunning || explorationSeconds < (gameState.settings.explorationTimeMinutes || 20) * 60 ? explorationSeconds : undefined}
+        isTimerRunning={explorationRunning}
       />
 
       {/* Main Content Area */}
@@ -183,6 +254,8 @@ export function App() {
               }
             }}
             restlessSpirits={gameState.chosenBlessingId === 3 ? gameState.restlessSpirits : undefined}
+            narratorAngle={gameState.narratorAngle}
+            onUpdateNarratorAngle={angle => setGameState(prev => ({ ...prev, narratorAngle: angle }))}
             onStartNight={handleStartNight}
           />
         )}
@@ -200,6 +273,14 @@ export function App() {
             gameState={gameState}
             setGameState={setGameState}
             onAdvanceToFinale={handleAdvanceToFinale}
+            explorationTimer={{
+              secondsRemaining: explorationSeconds,
+              isRunning: explorationRunning,
+              onStart: handleStartTimer,
+              onPause: handlePauseTimer,
+              onReset: handleResetTimer,
+              onAddMinutes: handleAddTimerMinutes,
+            }}
           />
         )}
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, VolumeX, RotateCcw, Skull, Moon, Compass, Crosshair, HelpCircle } from 'lucide-react';
+import { Volume2, VolumeX, RotateCcw, Skull, Moon, Compass, Crosshair, HelpCircle, Clock } from 'lucide-react';
 import { GamePhase } from '../types/game';
 
 interface HeaderProps {
@@ -8,6 +8,8 @@ interface HeaderProps {
   onToggleSound: () => void;
   onResetGame: () => void;
   onOpenRules: () => void;
+  timerSecondsRemaining?: number;
+  isTimerRunning?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -16,6 +18,8 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSound,
   onResetGame,
   onOpenRules,
+  timerSecondsRemaining,
+  isTimerRunning,
 }) => {
   const getPhaseBadge = () => {
     switch (phase) {
@@ -35,6 +39,9 @@ export const Header: React.FC<HeaderProps> = ({
   const badge = getPhaseBadge();
   const Icon = badge.icon;
 
+  const timerMins = timerSecondsRemaining !== undefined ? Math.floor(timerSecondsRemaining / 60) : 0;
+  const timerSecs = timerSecondsRemaining !== undefined ? timerSecondsRemaining % 60 : 0;
+
   return (
     <header className="sticky top-0 z-30 bg-[#0e0f18]/95 backdrop-blur-md border-b border-rose-950/40 px-3 py-2.5 sm:px-4">
       <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
@@ -53,6 +60,24 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Header Live Timer Pill */}
+          {timerSecondsRemaining !== undefined && (
+            <div
+              className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-mono font-bold border transition-all ${
+                timerSecondsRemaining === 0
+                  ? 'bg-rose-950 text-rose-300 border-rose-600 animate-pulse'
+                  : isTimerRunning
+                  ? 'bg-amber-950/80 text-amber-300 border-amber-600 shadow-sm shadow-amber-900/50'
+                  : 'bg-zinc-900 text-zinc-300 border-zinc-700'
+              }`}
+            >
+              <Clock className="w-3 h-3 text-rose-400" />
+              <span>
+                {String(timerMins).padStart(2, '0')}:{String(timerSecs).padStart(2, '0')}
+              </span>
+            </div>
+          )}
+
           {/* Phase Pill */}
           <div className={`hidden xs:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${badge.color}`}>
             <Icon className="w-3.5 h-3.5" />

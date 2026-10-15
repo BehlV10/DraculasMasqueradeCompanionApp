@@ -5,30 +5,49 @@ import { playBell, playTick } from '../utils/sound';
 interface TimerWidgetProps {
   label: string;
   defaultMinutes: number;
+  secondsRemaining?: number;
+  isRunning?: boolean;
+  onStart?: () => void;
+  onPause?: () => void;
+  onReset?: (mins?: number) => void;
+  onAddMinutes?: (mins: number) => void;
   onTimeExpire?: () => void;
 }
 
 export const TimerWidget: React.FC<TimerWidgetProps> = ({
   label,
   defaultMinutes,
+  secondsRemaining: controlledSeconds,
+  isRunning: controlledIsRunning,
+  onStart,
+  onPause,
+  onReset,
+  onAddMinutes,
   onTimeExpire,
 }) => {
-  const [secondsRemaining, setSecondsRemaining] = useState(defaultMinutes * 60);
-  const [isRunning, setIsRunning] = useState(false);
+  const isControlled = controlledSeconds !== undefined;
+  const [localSecondsRemaining, setLocalSecondsRemaining] = useState(defaultMinutes * 60);
+  const [localIsRunning, setLocalIsRunning] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+
+  const secondsRemaining = isControlled ? controlledSeconds! : localSecondsRemaining;
+  const isRunning = isControlled ? !!controlledIsRunning : localIsRunning;
   const prevSecondsRef = useRef(secondsRemaining);
 
-  // Sync if defaultMinutes changes
+  // Sync if defaultMinutes changes in uncontrolled mode
   useEffect(() => {
-    setSecondsRemaining(defaultMinutes * 60);
-    setIsRunning(false);
-  }, [defaultMinutes]);
+    if (!isControlled) {
+      setLocalSecondsRemaining(defaultMinutes * 60);
+      setLocalIsRunning(false);
+    }
+  }, [defaultMinutes, isControlled]);
 
   useEffect(() => {
+    if (isControlled) return;
     let interval: number | undefined;
     if (isRunning) {
       interval = window.setInterval(() => {
-        setSecondsRemaining(prev => {
+        setLocalSecondsRemaining(prev => {
           if (prev <= 1) {
             playBell();
             if (onTimeExpire) onTimeExpire();
@@ -44,22 +63,40 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isRunning, onTimeExpire]);
+  }, [isRunning, onTimeExpire, isControlled]);
 
   useEffect(() => {
-    if (secondsRemaining === 0 && isRunning) {
-      setIsRunning(false);
+    if (secondsRemaining === 0 && isRunning && !isControlled) {
+      setLocalIsRunning(false);
     }
     prevSecondsRef.current = secondsRemaining;
-  }, [secondsRemaining, isRunning]);
+  }, [secondsRemaining, isRunning, isControlled]);
 
-  const addMinutes = (mins: number) => {
-    setSecondsRemaining(prev => Math.max(0, prev + mins * 60));
+  const handleTogglePlay = () => {
+    if (isRunning) {
+      if (onPause) onPause();
+      else setLocalIsRunning(false);
+    } else {
+      if (onStart) onStart();
+      else setLocalIsRunning(true);
+    }
   };
 
-  const resetTimer = (mins: number = defaultMinutes) => {
-    setIsRunning(false);
-    setSecondsRemaining(mins * 60);
+  const handleAddMinutes = (mins: number) => {
+    if (onAddMinutes) {
+      onAddMinutes(mins);
+    } else {
+      setLocalSecondsRemaining(prev => Math.max(0, prev + mins * 60));
+    }
+  };
+
+  const handleReset = (mins: number = defaultMinutes) => {
+    if (onReset) {
+      onReset(mins);
+    } else {
+      setLocalIsRunning(false);
+      setLocalSecondsRemaining(mins * 60);
+    }
   };
 
   const minutes = Math.floor(secondsRemaining / 60);
@@ -113,7 +150,7 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
         {/* Primary Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2">
           <button
-            onClick={() => setIsRunning(!isRunning)}
+            onClick={handleTogglePlay}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold text-xs sm:text-sm transition-transform active:scale-95 shadow-md ${
               isRunning
                 ? 'bg-amber-600 hover:bg-amber-500 text-amber-950'
@@ -135,7 +172,7 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
 
           {/* Quick +1 Min Button */}
           <button
-            onClick={() => addMinutes(1)}
+            onClick={() => handleAddMinutes(1)}
             title="Quietly add 1 minute (Storyteller secret grace)"
             className="flex items-center gap-0.5 px-2 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 text-zinc-300 text-xs font-semibold"
           >
@@ -162,31 +199,31 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
 
           <div className="flex flex-wrap items-center gap-1.5">
             <button
-              onClick={() => addMinutes(2)}
+              onClick={() => handleAddMinutes(2)}
               className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs font-medium"
             >
               +2 min
             </button>
             <button
-              onClick={() => addMinutes(5)}
+              onClick={() => handleAddMinutes(5)}
               className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs font-medium"
             >
               +5 min
             </button>
             <button
-              onClick={() => resetTimer(20)}
+              onClick={() => handleReset(20)}
               className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs font-medium"
             >
               Set 20m
             </button>
             <button
-              onClick={() => resetTimer(25)}
+              onClick={() => handleReset(25)}
               className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs font-medium"
             >
               Set 25m
             </button>
             <button
-              onClick={() => resetTimer(defaultMinutes)}
+              onClick={() => handleReset(defaultMinutes)}
               className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-medium"
             >
               <RotateCcw className="w-3 h-3" />
