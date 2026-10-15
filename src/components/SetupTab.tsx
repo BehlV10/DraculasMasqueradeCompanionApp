@@ -1,6 +1,7 @@
 import React from 'react';
 import { GameSettings, HunterType, Player, RoleType, RestlessSpirit } from '../types/game';
 import { GUEST_LIST_RULES, HUNTERS, OFFICIAL_COLORS, BASE_COLORS, VARIANT_COLORS } from '../data/gameData';
+import { getPlayerColor } from '../utils/gameLogic';
 import { SeatingChart } from './SeatingChart';
 import { Users, Shuffle, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 
@@ -138,6 +139,25 @@ export const SetupTab: React.FC<SetupTabProps> = ({
     });
   };
 
+  // Update a player's color with smart auto-swap if color is already in use by someone else
+  const updatePlayerColor = (playerIndex: number, newColorId: string) => {
+    const existingPlayerIndex = players.findIndex(
+      (p, idx) => idx !== playerIndex && p.colorId === newColorId
+    );
+    if (existingPlayerIndex !== -1) {
+      // Auto-swap colors with that player so colors stay 100% unique!
+      setPlayers(prev => {
+        const copy = [...prev];
+        const oldColor = copy[playerIndex].colorId;
+        copy[playerIndex] = { ...copy[playerIndex], colorId: newColorId };
+        copy[existingPlayerIndex] = { ...copy[existingPlayerIndex], colorId: oldColor };
+        return copy;
+      });
+    } else {
+      updatePlayer(playerIndex, { colorId: newColorId });
+    }
+  };
+
   // Swap physical positions / profiles of two players on the circular table (BOTC style)
   const handleSwapPlayers = (playerAId: string, playerBId: string) => {
     if (playerAId === playerBId) return;
@@ -199,12 +219,22 @@ export const SetupTab: React.FC<SetupTabProps> = ({
   const currentHunters = players.filter(p => p.role === 'hunter').length;
   const currentGuests = players.filter(p => p.role === 'guest').length;
 
-  const isRosterValid =
+  const isRoleCountValid =
     currentDracula === currentRule.dracula &&
     currentBrides === currentRule.brides &&
     currentHunters === currentRule.hunters &&
     currentGuests === currentRule.guests &&
     settings.selectedHunters.length === currentRule.hunters;
+
+  // Color uniqueness validation
+  const colorCounts: Record<string, number> = {};
+  players.forEach(p => {
+    colorCounts[p.colorId] = (colorCounts[p.colorId] || 0) + 1;
+  });
+  const duplicateColorIds = Object.keys(colorCounts).filter(id => colorCounts[id] > 1);
+  const hasDuplicateColors = duplicateColorIds.length > 0;
+
+  const isRosterValid = isRoleCountValid && !hasDuplicateColors;
 
   return (
     <div className="space-y-4 pb-20">
@@ -373,22 +403,32 @@ export const SetupTab: React.FC<SetupTabProps> = ({
                   {/* Color Select */}
                   <select
                     value={p.colorId}
-                    onChange={e => updatePlayer(idx, { colorId: e.target.value })}
-                    className="bg-zinc-900 border border-zinc-700/80 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-rose-500 font-medium"
+                    onChange={e => updatePlayerColor(idx, e.target.value)}
+                    className={`bg-zinc-900 border text-xs rounded-lg px-2 py-1.5 focus:outline-none font-medium transition-colors ${
+                      duplicateColorIds.includes(p.colorId)
+                        ? 'border-amber-500 bg-amber-950/40 text-amber-200 ring-1 ring-amber-500'
+                        : 'border-zinc-700/80 text-zinc-200 focus:border-rose-500'
+                    }`}
                   >
                     <optgroup label="Standard Colors">
-                      {BASE_COLORS.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
+                      {BASE_COLORS.map(c => {
+                        const otherP = players.find((o, oIdx) => oIdx !== idx && o.colorId === c.id);
+                        return (
+                          <option key={c.id} value={c.id}>
+                            {c.name}{otherP ? ` • Swaps with ${otherP.name || `P${otherP.seat}`}` : ''}
+                          </option>
+                        );
+                      })}
                     </optgroup>
                     <optgroup label="Dark / Light Shades">
-                      {VARIANT_COLORS.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
+                      {VARIANT_COLORS.map(c => {
+                        const otherP = players.find((o, oIdx) => oIdx !== idx && o.colorId === c.id);
+                        return (
+                          <option key={c.id} value={c.id}>
+                            {c.name}{otherP ? ` • Swaps with ${otherP.name || `P${otherP.seat}`}` : ''}
+                          </option>
+                        );
+                      })}
                     </optgroup>
                   </select>
                 </div>
@@ -434,8 +474,21 @@ export const SetupTab: React.FC<SetupTabProps> = ({
           })}
         </div>
 
-        {/* Validation Error/Notice */}
-        {!isRosterValid && (
+        {/* Validation Errors/Notices */}
+        {hasDuplicateColors && (
+          <div className="mt-3 p-2.5 rounded-xl bg-amber-950/50 border border-amber-700/80 flex items-center gap-2 text-xs text-amber-200 shadow-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400" />
+            <span>
+              Duplicate colors detected:{' '}
+              <strong className="text-amber-100 font-semibold">
+                {duplicateColorIds.map(id => getPlayerColor(id).name).join(', ')}
+              </strong>
+              . Each player must have a unique color clip before starting.
+            </span>
+          </div>
+        )}
+
+        {!isRoleCountValid && (
           <div className="mt-3 p-2.5 rounded-xl bg-amber-950/40 border border-amber-800/60 flex items-center gap-2 text-xs text-amber-300">
             <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400" />
             <span>
