@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Player, RoleType, RestlessSpirit } from '../types/game';
 import { getPlayerColor } from '../utils/gameLogic';
 import { HUNTERS } from '../data/gameData';
-import { Heart, LayoutGrid, CircleDot, ShieldAlert, Sparkles, Ghost, BookOpen, ArrowUpDown } from 'lucide-react';
+import { Heart, LayoutGrid, CircleDot, ShieldAlert, Sparkles, Ghost, BookOpen, ArrowUpDown, RotateCcw, RotateCw } from 'lucide-react';
 
 interface SeatingChartProps {
   players: Player[];
@@ -32,6 +32,143 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
   onSwapPlayers,
 }) => {
   const [viewMode, setViewMode] = useState<'circle' | 'list'>('circle');
+
+  // Sorted players & total
+  const sortedPlayers = [...players].sort((a, b) => a.seat - b.seat);
+  const total = sortedPlayers.length;
+
+  // Default gap is between the last player and player 1 (e.g. between seat N and seat 1)
+  const defaultGap = total > 0 ? {
+    gapIndex: total - 0.5,
+    baseAngle: ((total - 0.5) / total) * 2 * Math.PI + Math.PI / 2,
+  } : null;
+
+  // Effective narrator angle (if initial Math.PI / 2 default, anchor to default gap between last seat & seat 1)
+  const effectiveNarratorAngle = (narratorAngle === Math.PI / 2 && defaultGap)
+    ? defaultGap.baseAngle
+    : narratorAngle;
+
+  // Table rotation offset to ensure the chosen gap is always rotated to 6 o'clock (Math.PI / 2)
+  const rotationOffset = Math.PI / 2 - effectiveNarratorAngle;
+
+  // Precalculate all gaps between adjacent players around the table
+  const allGaps = sortedPlayers.map((p, idx) => {
+    const nextP = sortedPlayers[(idx + 1) % total];
+    const minSeat = Math.min(p.seat, nextP.seat);
+    const maxSeat = Math.max(p.seat, nextP.seat);
+    let gapIndex: number;
+    if (minSeat === 1 && maxSeat === total) {
+      gapIndex = total - 0.5;
+    } else {
+      gapIndex = (minSeat - 1) + (maxSeat - minSeat) / 2;
+    }
+    const baseAngle = (gapIndex / total) * 2 * Math.PI + Math.PI / 2;
+    const displayAngle = baseAngle + rotationOffset;
+    const radius = 38;
+    const x = 50 + radius * Math.cos(displayAngle);
+    const y = 50 + radius * Math.sin(displayAngle);
+    const colA = getPlayerColor(p.colorId);
+    const colB = getPlayerColor(nextP.colorId);
+
+    return {
+      seatA: p.seat,
+      seatB: nextP.seat,
+      nameA: p.name || `Player ${p.seat}`,
+      nameB: nextP.name || `Player ${nextP.seat}`,
+      colorA: colA,
+      colorB: colB,
+      gapIndex,
+      baseAngle,
+      displayAngle,
+      angle: displayAngle, // For backward compatibility with existing code
+      x,
+      y,
+    };
+  });
+
+  const isSameGap = (spirit: RestlessSpirit, gap: { seatA: number; seatB: number }) => {
+    return (
+      (spirit.betweenSeatA === gap.seatA && spirit.betweenSeatB === gap.seatB) ||
+      (spirit.betweenSeatA === gap.seatB && spirit.betweenSeatB === gap.seatA)
+    );
+  };
+
+  const findClosestGap = (cursorDisplayAngle: number) => {
+    if (allGaps.length === 0) return null;
+    let bestGap = allGaps[0];
+    let minDiff = Infinity;
+    for (const gap of allGaps) {
+      let diff = Math.abs(cursorDisplayAngle - gap.displayAngle) % (2 * Math.PI);
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestGap = gap;
+      }
+    }
+    return bestGap;
+  };
+
+  const findClosestGapByBaseAngle = (baseAngle: number) => {
+    if (allGaps.length === 0) return null;
+    let bestGap = allGaps[0];
+    let minDiff = Infinity;
+    for (const gap of allGaps) {
+      let diff = Math.abs(baseAngle - gap.baseAngle) % (2 * Math.PI);
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestGap = gap;
+      }
+    }
+    return bestGap;
+  };
+
+  const handleNudgeRotation = (direction: 'cw' | 'ccw') => {
+    if (!onUpdateNarratorAngle || allGaps.length === 0) return;
+    const currentGap = findClosestGapByBaseAngle(effectiveNarratorAngle);
+    const currentIndex = currentGap
+      ? allGaps.findIndex(g => g.seatA === currentGap.seatA && g.seatB === currentGap.seatB)
+      : 0;
+    const step = direction === 'cw' ? 1 : -1;
+    const nextIndex = (currentIndex + step + allGaps.length) % allGaps.length;
+    onUpdateNarratorAngle(allGaps[nextIndex].baseAngle);
+  };
+
+  const handleResetRotation = () => {
+    if (!onUpdateNarratorAngle) return;
+    if (defaultGap) {
+      onUpdateNarratorAngle(defaultGap.baseAngle);
+    } else {
+      onUpdateNarratorAngle(Math.PI / 2);
+    }
+  };
+
+  const getSpiritCoordinates = (
+    spirit: RestlessSpirit,
+    totalPlayers: number
+  ) => {
+    const { betweenSeatA, betweenSeatB } = spirit;
+    const minSeat = Math.min(betweenSeatA, betweenSeatB);
+    const maxSeat = Math.max(betweenSeatA, betweenSeatB);
+
+    let gapIndex: number;
+    if (minSeat === 1 && maxSeat === totalPlayers) {
+      gapIndex = totalPlayers - 0.5;
+    } else {
+      gapIndex = (minSeat - 1) + (maxSeat - minSeat) / 2;
+    }
+
+    const baseAngle = (gapIndex / totalPlayers) * 2 * Math.PI + Math.PI / 2;
+    const displayAngle = baseAngle + rotationOffset;
+    const radius = 38;
+
+    const x = 50 + radius * Math.cos(displayAngle);
+    const y = 50 + radius * Math.sin(displayAngle);
+
+    return { x, y };
+  };
+
+  // Restless Spirit drag state
   const [draggingSpiritIdx, setDraggingSpiritIdx] = useState<number | null>(null);
   const [dragCoords, setDragCoords] = useState<{ x: number; y: number } | null>(null);
   const [hoverGap, setHoverGap] = useState<{
@@ -47,17 +184,21 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
   // Narrator drag state
   const [isDraggingNarrator, setIsDraggingNarrator] = useState<boolean>(false);
   const [dragNarratorAngle, setDragNarratorAngle] = useState<number | null>(null);
-
-  const localNarratorAngle = isDraggingNarrator && dragNarratorAngle !== null ? dragNarratorAngle : narratorAngle;
+  const [hoverNarratorGap, setHoverNarratorGap] = useState<typeof allGaps[0] | null>(null);
+  const narratorDragMoved = useRef<boolean>(false);
+  const narratorPointerStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const pointerStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const circleContainerRef = useRef<HTMLDivElement>(null);
 
   const handleNarratorPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!onUpdateNarratorAngle) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingNarrator(true);
-    setDragNarratorAngle(narratorAngle);
+    setDragNarratorAngle(Math.PI / 2);
+    narratorDragMoved.current = false;
+    narratorPointerStartPos.current = { x: e.clientX, y: e.clientY };
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {
@@ -68,12 +209,22 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
   const handleNarratorPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDraggingNarrator) return;
     e.preventDefault();
+    const dist = Math.hypot(
+      e.clientX - narratorPointerStartPos.current.x,
+      e.clientY - narratorPointerStartPos.current.y
+    );
+    if (dist > 6) {
+      narratorDragMoved.current = true;
+    }
     const rect = circleContainerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
-    const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
-    setDragNarratorAngle(angle);
+    const cursorDisplayAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+    setDragNarratorAngle(cursorDisplayAngle);
+
+    const closest = findClosestGap(cursorDisplayAngle);
+    setHoverNarratorGap(closest);
   };
 
   const handleNarratorPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -84,12 +235,15 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
     } catch {
       // fallback
     }
-    const finalAngle = dragNarratorAngle !== null ? dragNarratorAngle : narratorAngle;
+
+    if (narratorDragMoved.current && hoverNarratorGap && onUpdateNarratorAngle) {
+      onUpdateNarratorAngle(hoverNarratorGap.baseAngle);
+    }
+
     setIsDraggingNarrator(false);
     setDragNarratorAngle(null);
-    if (onUpdateNarratorAngle) {
-      onUpdateNarratorAngle(finalAngle);
-    }
+    setHoverNarratorGap(null);
+    narratorDragMoved.current = false;
   };
 
   // Seat swapping state (BOTC style)
@@ -129,16 +283,17 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
         const relY = Math.max(5, Math.min(95, ((e.clientY - rect.top) / rect.height) * 100));
         setDragSeatCoords({ x: relX, y: relY });
 
-        // Find which other player seat the pointer is hovering over
+        // Find which other player seat the pointer is hovering over (including table rotationOffset)
         let closestPlayerId: string | null = null;
         let minDistance = Infinity;
 
         players.forEach((otherP, idx) => {
           if (otherP.id === pId) return;
-          const angle = (idx / players.length) * 2 * Math.PI + Math.PI / 2;
+          const baseAngle = (idx / players.length) * 2 * Math.PI + Math.PI / 2;
+          const displayAngle = baseAngle + rotationOffset;
           const radius = 38;
-          const targetX = 50 + radius * Math.cos(angle);
-          const targetY = 50 + radius * Math.sin(angle);
+          const targetX = 50 + radius * Math.cos(displayAngle);
+          const targetY = 50 + radius * Math.sin(displayAngle);
           const d = Math.hypot(relX - targetX, relY - targetY);
           if (d < 16 && d < minDistance) {
             minDistance = d;
@@ -186,135 +341,6 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
     setDraggingSeatPlayerId(null);
     setDragSeatCoords(null);
     setHoverSeatPlayerId(null);
-  };
-
-  const getRoleBadge = (player: Player) => {
-    switch (player.role) {
-      case 'dracula':
-        return (
-          <span className="w-5 h-5 rounded-full bg-red-600 text-white font-serif font-black text-xs flex items-center justify-center border border-red-400 shadow-sm shadow-red-500/50">
-            D
-          </span>
-        );
-      case 'bride':
-        return (
-          <span
-            title="Bride of Dracula"
-            className="w-4 h-4 rounded-full bg-red-600 border border-red-300 shadow-sm shadow-red-500/50 inline-block"
-          />
-        );
-      case 'hunter': {
-        const hInfo = HUNTERS.find(h => h.id === player.hunterType);
-        const initials = hInfo ? hInfo.initials : 'H';
-        return (
-          <span
-            title={hInfo?.name || 'Hunter'}
-            className="px-1 py-0.2 rounded bg-blue-700 text-blue-100 font-mono font-bold text-[10px] border border-blue-400"
-          >
-            {initials}
-          </span>
-        );
-      }
-      case 'guest':
-        return (
-          <span
-            title="Guest"
-            className="w-3.5 h-3.5 rounded-full bg-blue-500 border border-blue-300 shadow-sm inline-block"
-          />
-        );
-    }
-  };
-
-  const getRoleLabel = (role: RoleType, hunterType?: string) => {
-    if (role === 'dracula') return 'Dracula';
-    if (role === 'bride') return 'Bride';
-    if (role === 'guest') return 'Guest';
-    if (role === 'hunter') {
-      const h = HUNTERS.find(item => item.id === hunterType);
-      return h ? h.name : 'Hunter';
-    }
-    return role;
-  };
-
-  const getSpiritCoordinates = (
-    spirit: RestlessSpirit,
-    totalPlayers: number
-  ) => {
-    const { betweenSeatA, betweenSeatB } = spirit;
-    const minSeat = Math.min(betweenSeatA, betweenSeatB);
-    const maxSeat = Math.max(betweenSeatA, betweenSeatB);
-
-    let gapIndex: number;
-    if (minSeat === 1 && maxSeat === totalPlayers) {
-      gapIndex = totalPlayers - 0.5;
-    } else {
-      gapIndex = (minSeat - 1) + (maxSeat - minSeat) / 2;
-    }
-
-    const angle = (gapIndex / totalPlayers) * 2 * Math.PI + Math.PI / 2;
-    const radius = 38;
-
-    const x = 50 + radius * Math.cos(angle);
-    const y = 50 + radius * Math.sin(angle);
-
-    return { x, y };
-  };
-
-  const sortedPlayers = [...players].sort((a, b) => a.seat - b.seat);
-  const total = sortedPlayers.length;
-
-  // Precalculate all gaps between adjacent players around the table
-  const allGaps = sortedPlayers.map((p, idx) => {
-    const nextP = sortedPlayers[(idx + 1) % total];
-    const minSeat = Math.min(p.seat, nextP.seat);
-    const maxSeat = Math.max(p.seat, nextP.seat);
-    let gapIndex: number;
-    if (minSeat === 1 && maxSeat === total) {
-      gapIndex = total - 0.5;
-    } else {
-      gapIndex = (minSeat - 1) + (maxSeat - minSeat) / 2;
-    }
-    const angle = (gapIndex / total) * 2 * Math.PI + Math.PI / 2;
-    const radius = 38;
-    const x = 50 + radius * Math.cos(angle);
-    const y = 50 + radius * Math.sin(angle);
-    const colA = getPlayerColor(p.colorId);
-    const colB = getPlayerColor(nextP.colorId);
-
-    return {
-      seatA: p.seat,
-      seatB: nextP.seat,
-      nameA: p.name || `Player ${p.seat}`,
-      nameB: nextP.name || `Player ${nextP.seat}`,
-      colorA: colA,
-      colorB: colB,
-      gapIndex,
-      angle,
-      x,
-      y,
-    };
-  });
-
-  const isSameGap = (spirit: RestlessSpirit, gap: { seatA: number; seatB: number }) => {
-    return (
-      (spirit.betweenSeatA === gap.seatA && spirit.betweenSeatB === gap.seatB) ||
-      (spirit.betweenSeatA === gap.seatB && spirit.betweenSeatB === gap.seatA)
-    );
-  };
-
-  const findClosestGap = (cursorAngle: number) => {
-    if (allGaps.length === 0) return null;
-    let bestGap = allGaps[0];
-    let minDiff = Infinity;
-    for (const gap of allGaps) {
-      let diff = Math.abs(cursorAngle - gap.angle) % (2 * Math.PI);
-      if (diff > Math.PI) diff = 2 * Math.PI - diff;
-      if (diff < minDiff) {
-        minDiff = diff;
-        bestGap = gap;
-      }
-    }
-    return bestGap;
   };
 
   const handleSpiritPointerDown = (e: React.PointerEvent<HTMLDivElement>, sIdx: number) => {
@@ -407,6 +433,54 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
     setHoverGap(null);
   };
 
+  const getRoleBadge = (player: Player) => {
+    switch (player.role) {
+      case 'dracula':
+        return (
+          <span className="w-5 h-5 rounded-full bg-red-600 text-white font-serif font-black text-xs flex items-center justify-center border border-red-400 shadow-sm shadow-red-500/50">
+            D
+          </span>
+        );
+      case 'bride':
+        return (
+          <span
+            title="Bride of Dracula"
+            className="w-4 h-4 rounded-full bg-red-600 border border-red-300 shadow-sm shadow-red-500/50 inline-block"
+          />
+        );
+      case 'hunter': {
+        const hInfo = HUNTERS.find(h => h.id === player.hunterType);
+        const initials = hInfo ? hInfo.initials : 'H';
+        return (
+          <span
+            title={hInfo?.name || 'Hunter'}
+            className="px-1 py-0.2 rounded bg-blue-700 text-blue-100 font-mono font-bold text-[10px] border border-blue-400"
+          >
+            {initials}
+          </span>
+        );
+      }
+      case 'guest':
+        return (
+          <span
+            title="Guest"
+            className="w-3.5 h-3.5 rounded-full bg-blue-500 border border-blue-300 shadow-sm inline-block"
+          />
+        );
+    }
+  };
+
+  const getRoleLabel = (role: RoleType, hunterType?: string) => {
+    if (role === 'dracula') return 'Dracula';
+    if (role === 'bride') return 'Bride';
+    if (role === 'guest') return 'Guest';
+    if (role === 'hunter') {
+      const h = HUNTERS.find(item => item.id === hunterType);
+      return h ? h.name : 'Hunter';
+    }
+    return role;
+  };
+
   return (
     <div className="bg-[#10111d] rounded-2xl border border-rose-950/40 p-3 sm:p-4">
       {/* View Mode Toggle Header */}
@@ -459,7 +533,7 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
               MASQUERADE
             </span>
             <span className="text-[10px] text-zinc-500 mt-0.5">Seating Table</span>
-            <div className="flex items-center gap-2 mt-1.5 text-[9px] text-zinc-400">
+            <div className="flex items-center gap-2 mt-1 text-[9px] text-zinc-400">
               <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-red-600 inline-block" /> Evil
               </span>
@@ -468,19 +542,69 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
               </span>
             </div>
             {restlessSpirits.length > 0 && (
-              <div className="mt-1 px-1.5 py-0.5 rounded-md bg-purple-950/80 border border-purple-800 text-[8px] sm:text-[9px] text-purple-200 flex items-center gap-1 font-medium">
+              <div className="mt-0.5 px-1.5 py-0.5 rounded-md bg-purple-950/80 border border-purple-800 text-[8px] sm:text-[9px] text-purple-200 flex items-center gap-1 font-medium">
                 <Ghost className="w-2.5 h-2.5 text-purple-400" />
                 <span>{restlessSpirits.length} Spirits</span>
               </div>
             )}
             {onSwapPlayers && (
-              <div className="flex items-center gap-1 mt-1 text-[8px] sm:text-[9px] text-amber-300/80 font-medium">
+              <div className="flex items-center gap-1 mt-0.5 text-[8px] sm:text-[9px] text-amber-300/80 font-medium">
                 <ArrowUpDown className="w-2.5 h-2.5" />
-                <span>Tap or drag seats to swap</span>
+                <span>Tap/drag seats to swap</span>
               </div>
             )}
-            <span className="text-[9px] text-zinc-500 italic mt-0.5">Clockwise ➔</span>
+            {onUpdateNarratorAngle && (
+              <div className="flex items-center gap-1.5 mt-1 z-10" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => handleNudgeRotation('ccw')}
+                  title="Rotate Table Counter-Clockwise (POV)"
+                  className="p-1 rounded-full bg-zinc-800/80 hover:bg-zinc-700 active:scale-95 text-zinc-400 hover:text-zinc-200 transition-all border border-zinc-700/60"
+                >
+                  <RotateCcw className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetRotation}
+                  title="Reset Host POV to default"
+                  className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] bg-zinc-800/80 hover:bg-zinc-700 active:scale-95 text-zinc-400 hover:text-zinc-200 transition-all border border-zinc-700/60 font-mono font-medium"
+                >
+                  POV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleNudgeRotation('cw')}
+                  title="Rotate Table Clockwise (POV)"
+                  className="p-1 rounded-full bg-zinc-800/80 hover:bg-zinc-700 active:scale-95 text-zinc-400 hover:text-zinc-200 transition-all border border-zinc-700/60"
+                >
+                  <RotateCw className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                </button>
+              </div>
+            )}
+            <span className="text-[8px] sm:text-[9px] text-zinc-500 italic mt-0.5">Clockwise ➔</span>
           </div>
+
+          {/* Narrator Dragging Hover Banner */}
+          {isDraggingNarrator && hoverNarratorGap && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-35 px-3 py-1 rounded-full bg-zinc-900/95 border border-zinc-400 text-[10px] sm:text-xs text-zinc-100 font-bold shadow-[0_0_18px_rgba(255,255,255,0.4)] pointer-events-none whitespace-nowrap flex items-center gap-1.5 animate-pulse">
+              <BookOpen className="w-3.5 h-3.5 text-zinc-300" />
+              <span>Stand between {hoverNarratorGap.nameA} ↔ {hoverNarratorGap.nameB} (Drop to rotate table)</span>
+            </div>
+          )}
+
+          {/* Narrator Drag Hover Gap Ring */}
+          {isDraggingNarrator && hoverNarratorGap && (
+            <div
+              style={{
+                left: `${hoverNarratorGap.x}%`,
+                top: `${hoverNarratorGap.y}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+              className="absolute z-25 w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-dashed border-zinc-200 bg-zinc-700/50 shadow-[0_0_20px_rgba(255,255,255,0.7)] pointer-events-none animate-pulse flex items-center justify-center"
+            >
+              <BookOpen className="w-4 h-4 text-zinc-100" />
+            </div>
+          )}
 
           {/* Seat Dragging Hover Banner */}
           {draggingSeatPlayerId !== null && (
@@ -546,6 +670,7 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
                   left: `${gap.x}%`,
                   top: `${gap.y}%`,
                   transform: 'translate(-50%, -50%)',
+                  transition: 'left 0.4s cubic-bezier(0.25, 1, 0.5, 1), top 0.4s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease',
                 }}
                 title={`Tap to place Spirit #${targetSpiritIdx + 1} between ${gap.nameA} & ${gap.nameB}`}
                 className={`absolute z-15 flex items-center justify-center cursor-pointer transition-all ${
@@ -561,11 +686,12 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
 
           {/* Player Seats positioned in circle (Seat 1 at bottom, progressing clockwise) */}
           {players.map((p, index) => {
-            const angle = (index / total) * 2 * Math.PI + Math.PI / 2; // start from bottom (6 o'clock)
+            const baseAngle = (index / total) * 2 * Math.PI + Math.PI / 2; // start from bottom (6 o'clock)
+            const displayAngle = baseAngle + rotationOffset;
             // Calculate coordinates (percentage radius around center: ~38%)
             const radius = 38;
-            const x = 50 + radius * Math.cos(angle);
-            const y = 50 + radius * Math.sin(angle);
+            const x = 50 + radius * Math.cos(displayAngle);
+            const y = 50 + radius * Math.sin(displayAngle);
             const pColor = getPlayerColor(p.colorId);
             const isSelected = selectedPlayerId === p.id;
             const isSwapSource = swapSourcePlayerId === p.id;
@@ -589,6 +715,9 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
                   left: `${x}%`,
                   top: `${y}%`,
                   transform: 'translate(-50%, -50%)',
+                  transition: isDraggingThis
+                    ? 'none'
+                    : 'left 0.4s cubic-bezier(0.25, 1, 0.5, 1), top 0.4s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease',
                 }}
                 className={`absolute z-10 flex flex-col items-center transition-all select-none ${
                   onSwapPlayers
@@ -744,7 +873,7 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
                   left: `${posX}%`,
                   top: `${posY}%`,
                   transform: 'translate(-50%, -50%)',
-                  transition: isDragging ? 'none' : 'left 0.25s ease-out, top 0.25s ease-out, transform 0.15s ease',
+                  transition: isDragging ? 'none' : 'left 0.4s cubic-bezier(0.25, 1, 0.5, 1), top 0.4s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease',
                 }}
                 title={
                   onUpdateSpirit
@@ -791,12 +920,14 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
             );
           })}
 
-          {/* Draggable Narrator Token */}
+          {/* Draggable Narrator Token (Anchored at 6 o'clock POV by default, draggable to rotate table) */}
           {(() => {
-            const angle = localNarratorAngle;
-            const narratorRadius = 42;
-            const nx = 50 + narratorRadius * Math.cos(angle);
-            const ny = 50 + narratorRadius * Math.sin(angle);
+            const displayAngle = isDraggingNarrator && dragNarratorAngle !== null
+              ? dragNarratorAngle
+              : Math.PI / 2;
+            const narratorRadius = 43;
+            const nx = 50 + narratorRadius * Math.cos(displayAngle);
+            const ny = 50 + narratorRadius * Math.sin(displayAngle);
 
             return (
               <div
@@ -808,10 +939,18 @@ export const SeatingChart: React.FC<SeatingChartProps> = ({
                   left: `${nx}%`,
                   top: `${ny}%`,
                   transform: 'translate(-50%, -50%)',
-                  transition: isDraggingNarrator ? 'none' : 'transform 0.15s ease',
+                  transition: isDraggingNarrator
+                    ? 'none'
+                    : 'left 0.4s cubic-bezier(0.25, 1, 0.5, 1), top 0.4s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease',
                 }}
-                title="Narrator (Host) - Drag around the table to indicate where you are seated"
-                className={`absolute z-25 flex flex-col items-center select-none touch-none cursor-grab active:cursor-grabbing ${
+                title={
+                  onUpdateNarratorAngle
+                    ? "Host POV (Narrator) - Drag to where you are standing in the room to rotate table"
+                    : "Host POV (Narrator)"
+                }
+                className={`absolute z-25 flex flex-col items-center select-none touch-none ${
+                  onUpdateNarratorAngle ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'
+                } ${
                   isDraggingNarrator ? 'z-50 scale-125' : 'hover:scale-115'
                 }`}
               >
