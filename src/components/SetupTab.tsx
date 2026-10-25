@@ -1,9 +1,9 @@
 import React from 'react';
-import { GameSettings, HunterType, Player, RoleType, RestlessSpirit } from '../types/game';
-import { GUEST_LIST_RULES, HUNTERS, OFFICIAL_COLORS, BASE_COLORS, VARIANT_COLORS } from '../data/gameData';
+import { GameSettings, HunterType, Player, RoleType, RestlessSpirit, DarkBlessingId } from '../types/game';
+import { GUEST_LIST_RULES, HUNTERS, OFFICIAL_COLORS, BASE_COLORS, VARIANT_COLORS, DARK_BLESSINGS } from '../data/gameData';
 import { getPlayerColor } from '../utils/gameLogic';
 import { SeatingChart } from './SeatingChart';
-import { Users, Shuffle, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Users, Shuffle, ArrowRight, ShieldCheck, AlertCircle, Sparkles } from 'lucide-react';
 
 interface SetupTabProps {
   settings: GameSettings;
@@ -128,6 +128,30 @@ export const SetupTab: React.FC<SetupTabProps> = ({
       }
     }
     setSettings(prev => ({ ...prev, selectedHunters: updated }));
+  };
+
+  const selectedBlessingIds = settings.selectedBlessingIds || [1, 2, 3, 4, 5];
+
+  const handleSelectBlessingPreset = (preset: 'set1' | 'set2') => {
+    const ids: DarkBlessingId[] = preset === 'set1' ? [1, 2, 3, 4, 5] : [6, 7, 8, 9, 10];
+    setSettings(prev => ({ ...prev, selectedBlessingIds: ids }));
+  };
+
+  const toggleBlessing = (bId: DarkBlessingId) => {
+    const isSelected = selectedBlessingIds.includes(bId);
+    let updated: DarkBlessingId[];
+    if (isSelected) {
+      if (selectedBlessingIds.length <= 1) return; // Keep at least one
+      updated = selectedBlessingIds.filter(id => id !== bId);
+    } else {
+      if (selectedBlessingIds.length >= 5) {
+        // Swap out the first one to always maintain exactly 5
+        updated = [...selectedBlessingIds.slice(1), bId];
+      } else {
+        updated = [...selectedBlessingIds, bId];
+      }
+    }
+    setSettings(prev => ({ ...prev, selectedBlessingIds: updated }));
   };
 
   // Update a single player's details
@@ -345,6 +369,88 @@ export const SetupTab: React.FC<SetupTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* 2b. Choose Dark Blessings Pool (5 of 10) */}
+      <div className="bg-[#10111d] rounded-2xl border border-rose-950/40 p-3 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div>
+            <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              Dark Blessings Pool ({selectedBlessingIds.length} of 5 Active)
+            </h3>
+            <p className="text-[11px] text-zinc-400">
+              Dracula secretly chooses 1 from this 5-card pool during the Night phase (holding up 1–5 fingers).
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleSelectBlessingPreset('set1')}
+              className={`px-2 py-1 rounded-lg text-xs font-bold border transition-all ${
+                selectedBlessingIds.length === 5 && [1, 2, 3, 4, 5].every(id => selectedBlessingIds.includes(id as any))
+                  ? 'bg-purple-950 text-purple-200 border-purple-500 shadow-sm'
+                  : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border-zinc-800'
+              }`}
+            >
+              Set 1 (Base 1–5)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectBlessingPreset('set2')}
+              className={`px-2 py-1 rounded-lg text-xs font-bold border transition-all ${
+                selectedBlessingIds.length === 5 && [6, 7, 8, 9, 10].every(id => selectedBlessingIds.includes(id as any))
+                  ? 'bg-purple-950 text-purple-200 border-purple-500 shadow-sm'
+                  : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border-zinc-800'
+              }`}
+            >
+              Set 2 (Advanced 6–10)
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+          {DARK_BLESSINGS.map(b => {
+            const isSelected = selectedBlessingIds.includes(b.id);
+            const slotIndex = isSelected ? selectedBlessingIds.indexOf(b.id) + 1 : null;
+            return (
+              <div
+                key={b.id}
+                onClick={() => toggleBlessing(b.id)}
+                className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
+                  isSelected
+                    ? 'bg-purple-950/60 border-purple-500 text-purple-100 shadow-sm'
+                    : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-5 h-5 rounded-full text-xs font-mono font-bold flex items-center justify-center ${
+                      isSelected
+                        ? 'bg-purple-800 border border-purple-500 text-white'
+                        : 'bg-zinc-800 border border-zinc-700 text-zinc-400'
+                    }`}>
+                      {isSelected ? `#${slotIndex}` : b.id}
+                    </span>
+                    <span className="text-xs font-bold text-zinc-100">
+                      {b.name}
+                    </span>
+                  </div>
+                  <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
+                    b.set === 1
+                      ? 'bg-rose-950/60 text-rose-300 border-rose-900/80'
+                      : 'bg-indigo-950/60 text-indigo-300 border-indigo-900/80'
+                  }`}>
+                    Set {b.set}
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
+                  {b.description}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* 3. Seating Chart Visualization */}
       <SeatingChart

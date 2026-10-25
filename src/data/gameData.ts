@@ -68,35 +68,77 @@ export const GUEST_LIST_RULES: Record<number, RosterRule> = {
 };
 
 export const DARK_BLESSINGS: DarkBlessing[] = [
+  // Set 1 (Classic / Base)
   {
     id: 1,
+    set: 1,
     name: 'Blood Corruption',
     description: 'Choose a good player. They register as Evil for room questions.',
     shortEffect: 'Chosen Good player registers as Evil for room questions.',
   },
   {
     id: 2,
+    set: 1,
     name: 'Puppet Strings',
     description: 'Choose a good player. All their votes are secretly changed to Fail. Dracula may only cast Pass votes.',
     shortEffect: 'Chosen Good player votes secretly become Fail. Dracula can only Pass.',
   },
   {
     id: 3,
+    set: 1,
     name: 'Restless Spirits',
     description: 'Place a Spirit between any 2 players and choose whether it registers as Good or Evil. Do this twice.',
     shortEffect: '2 Spirits placed between seats, registering as Good or Evil.',
   },
   {
     id: 4,
+    set: 1,
     name: 'Echoing Curse',
     description: 'Whenever Dracula votes Fail, it is treated as a Pass in his current room. The next room automatically Fails.',
     shortEffect: 'Dracula Fail becomes Pass; subsequent room automatically Fails.',
   },
   {
     id: 5,
+    set: 1,
     name: 'Gathering Shadows',
     description: 'Choose a room number. That room will Fail regardless of the votes cast. You may use this at any time during the game.',
     shortEffect: 'Designated room number automatically Fails regardless of votes.',
+  },
+  // Set 2 (Advanced / Alternate)
+  {
+    id: 6,
+    set: 2,
+    name: 'Twisted Whispers',
+    description: 'Choose a player. In their 1-person Room, a Pass gives false information and a Fail gives true information.',
+    shortEffect: 'In chosen player\'s solo room: Pass gives false info, Fail gives true info.',
+  },
+  {
+    id: 7,
+    set: 2,
+    name: 'Winged Spies',
+    description: 'Learn all Hunters in play. Choose a Hunter: That chosen player receives false information of your choice. At 5 players, instead add a Hunter and allow Evil to win through Dracula\'s Last Chance.',
+    shortEffect: 'Dracula learns all Hunters; one Hunter receives false info.',
+  },
+  {
+    id: 8,
+    set: 2,
+    name: 'Blood Effigy',
+    description: 'Choose a Good player. They register as Good and as Dracula. You register as Evil and as a Bride. Good must shoot the chosen player to win.',
+    shortEffect: 'Chosen Good player registers as Dracula. Real Dracula registers as Bride.',
+  },
+  {
+    id: 9,
+    set: 2,
+    name: 'Dark Veil',
+    description: 'Choose Good players equal to the number of Evil players. One registers as Evil and as Dracula; the rest register as Evil and as Brides. All Evil players register as Good. Dracula is disguised as Renfield. Good must shoot Renfield to win.',
+    shortEffect: 'Good players register as Dracula/Brides. Evil registers as Good. Renfield is Dracula!',
+  },
+  {
+    id: 10,
+    set: 2,
+    name: 'Soul Swap',
+    description: 'Choose a Good player and a Bride. For Room questions, when one is selected, the other is selected instead, and their seating positions are swapped.',
+    shortEffect: 'Chosen Good player & Bride swap seating positions and room question targets.',
   },
 ];
 
@@ -301,25 +343,31 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
     options: ['Yes', 'No'],
   },
   {
-    id: 'solo_evil_in_room_after',
+    id: 'solo_player_passed_rooms_prior',
     hearts: 1,
-    question: 'Is there an Evil player in the room after?',
+    question: 'Has [Player] been in any passed rooms prior to this one?',
     category: 'history',
     options: ['Yes', 'No'],
-    notes: 'To be answered when room after is explored or logged',
+  },
+  {
+    id: 'solo_player_failed_rooms_prior',
+    hearts: 1,
+    question: 'Has [Player] been in any failed rooms prior to this one?',
+    category: 'history',
+    options: ['Yes', 'No'],
+  },
+  {
+    id: 'solo_shared_room_with_dracula',
+    hearts: 1,
+    question: 'Have I ever shared a room with Dracula?',
+    category: 'history',
+    options: ['Yes', 'No'],
   },
   {
     id: 'solo_blessing_in_play',
     hearts: 1,
     question: 'Is the [1st/2nd/3rd/4th/5th] Dark Blessing in play?',
     category: 'blessing',
-    options: ['Yes', 'No'],
-  },
-  {
-    id: 'solo_is_hunter',
-    hearts: 1,
-    question: 'Is [Player] a Hunter? (Evil players using this room always learn "No")',
-    category: 'identity',
     options: ['Yes', 'No'],
   },
   {
@@ -337,17 +385,10 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
     options: ['Yes', 'No'],
   },
   {
-    id: 'solo_room_after_fail',
+    id: 'solo_yes_no_freeform',
     hearts: 1,
-    question: 'Did the room after this Fail?',
-    category: 'history',
-    options: ['Yes', 'No'],
-  },
-  {
-    id: 'solo_hunter_in_play',
-    hearts: 1,
-    question: 'Is the [1st/2nd/3rd/4th/5th] Hunter in play?',
-    category: 'blessing',
+    question: 'Ask the storyteller a yes/no question.',
+    category: 'identity',
     options: ['Yes', 'No'],
   },
 
@@ -395,21 +436,21 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
     options: ['Clockwise', 'Counter Clockwise'],
   },
   {
-    id: 'multi2_dracula_room_after',
+    id: 'multi2_sitting_next_to_dracula',
     hearts: 2,
-    question: 'Is Dracula in the room after?',
-    category: 'history',
+    question: 'Am I sitting next to Dracula?',
+    category: 'adjacency',
     options: ['Yes', 'No'],
   },
   {
-    id: 'multi2_dracula_evil_neighbors',
+    id: 'multi2_any_next_to_two_evil',
     hearts: 2,
-    question: 'How many Evil players is Dracula sitting next to?',
+    question: 'Are any players sitting next to 2 evil players?',
     category: 'adjacency',
-    options: ['0', '1', '2'],
+    options: ['Yes', 'No'],
   },
   {
-    id: 'multi2_sitting_next_to_dracula',
+    id: 'multi2_room_sitting_next_to_dracula',
     hearts: 2,
     question: 'Are any of the players in this room sitting next to Dracula?',
     category: 'adjacency',
@@ -506,9 +547,11 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
     category: 'history',
     options: ['Yes', 'No'],
   },
+
+  // 3-Heart Rooms (Multiplayer)
   {
-    id: 'multi2_dracula_hearts_used',
-    hearts: 2,
+    id: 'multi3_dracula_hearts_used',
+    hearts: 3,
     question: 'How many heart tokens has Dracula used across all prior rooms?',
     category: 'history',
     options: ['0', '1', '2', '3'],
@@ -519,15 +562,6 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
     question: 'Did the room before this fail? If so who failed it?',
     category: 'history',
     options: ['No', 'Yes (Name player)'],
-  },
-
-  // 3-Heart Rooms (Multiplayer)
-  {
-    id: 'multi3_second_largest_good',
-    hearts: 3,
-    question: 'What is the 2nd largest group of adjacent Good players?',
-    category: 'counts',
-    options: ['0', '1', '2', '3', '4', '5', '6', '7', '8+'],
   },
   {
     id: 'multi3_dracula_closer_cw_ccw',
@@ -560,7 +594,7 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi3_are_these_all_good',
     hearts: 3,
-    question: 'List as many players as you like, are they all Good?',
+    question: 'List as many players as you like, are they all Good? ([Player])',
     category: 'identity',
     options: ['Yes', 'No'],
   },
@@ -579,10 +613,10 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
     options: ['They are good', 'No Answer'],
   },
   {
-    id: 'multi3_am_i_next_to_dracula',
+    id: 'multi3_is_dracula_among_them',
     hearts: 3,
-    question: 'Am I sitting next to Dracula?',
-    category: 'adjacency',
+    question: 'List as many players as you like, is Dracula among them? ([Player])',
+    category: 'identity',
     options: ['Yes', 'No'],
   },
   {
@@ -595,16 +629,16 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi3_are_these_all_evil',
     hearts: 3,
-    question: 'List as many players as you like, are they all Evil?',
+    question: 'List as many players as you like, are they all Evil? ([Player])',
     category: 'identity',
     options: ['Yes', 'No'],
   },
   {
-    id: 'multi3_how_far_back_failed',
+    id: 'multi3_player_room_number_fail',
     hearts: 3,
-    question: 'How far back was the last room to Fail?',
+    question: "Did [Player]'s [1st / 2nd / 3rd] room fail?",
     category: 'history',
-    options: ['1', '2', '3', '4', '5', '6', '7', '8', '9+', 'None'],
+    options: ['Yes', 'No'],
   },
   {
     id: 'multi3_rooms_only_good',
@@ -621,11 +655,18 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
     options: ['0', '1', '2', '3', '4', '5', '6', '7', '8+'],
   },
   {
-    id: 'multi3_room_after_fail_who',
+    id: 'multi3_players_all_voted_pass_prior',
     hearts: 3,
-    question: 'Did the room after this fail? If so who failed it?',
+    question: 'List players, have they voted pass in all their rooms prior? ([Player])',
     category: 'history',
-    options: ['No', 'Yes (Name player)'],
+    options: ['Yes', 'No'],
+  },
+  {
+    id: 'multi3_players_all_in_failed_room_prior',
+    hearts: 3,
+    question: 'List players, have they all been in a failed room prior? ([Player])',
+    category: 'history',
+    options: ['Yes', 'No'],
   },
   {
     id: 'multi3_dracula_within_x',

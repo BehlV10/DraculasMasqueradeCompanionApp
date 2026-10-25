@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { GameState, Player, RoomHeartCount, RoomLogEntry, RoomCardDefinition, RoomCardCategory } from '../types/game';
+import { GameState, RoomHeartCount, RoomLogEntry, RoomCardDefinition, RoomCardCategory } from '../types/game';
 import { ROOM_CARDS, ROOM_CATEGORIES } from '../data/gameData';
 import { computeRoomAnswer, getPlayerColor, isEvilRole, resolveQuestionText } from '../utils/gameLogic';
 import { playFailSound, playPassSound } from '../utils/sound';
@@ -253,6 +253,11 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
     finalOutcome = anyFailed ? 'fail' : 'pass';
   }
 
+  const isTwistedWhispersSolo =
+    gameState.chosenBlessingId === 6 &&
+    hearts === 1 &&
+    leaderId === gameState.twistedPlayerId;
+
   const selectedQuestion = ROOM_CARDS.find(q => q.id === selectedQuestionId) || ROOM_CARDS[0];
   const leaderPlayer = players.find(p => p.id === leaderId) || players[0];
   const participantPlayers = participantIds.map(id => players.find(p => p.id === id)!).filter(Boolean);
@@ -344,7 +349,11 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
       ),
       calculatedTrueAnswer: answerAnalysis?.trueAnswer,
       suggestedLie: answerAnalysis?.recommendedLie,
-      answerGiven: answerGiven || (finalOutcome === 'pass' ? answerAnalysis?.trueAnswer || 'Pass' : answerAnalysis?.recommendedLie || 'Fail'),
+      answerGiven: answerGiven || (
+        isTwistedWhispersSolo
+          ? (finalOutcome === 'pass' ? answerAnalysis?.recommendedLie || 'Fail' : answerAnalysis?.trueAnswer || 'Pass')
+          : (finalOutcome === 'pass' ? answerAnalysis?.trueAnswer || 'Pass' : answerAnalysis?.recommendedLie || 'Fail')
+      ),
       timestamp: Date.now(),
       echoingCurseTriggered: isEchoingCurseFail,
       gatheringShadowsTriggered: isShadowForcedFail,
@@ -771,10 +780,12 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
           {(selectedQuestion.question.includes('[1st') || selectedQuestion.question.includes('___ seats') || selectedQuestion.question.includes('[X] or [Y]')) && (
             <div className="mt-2.5 p-2.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
               <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
-                Parameter (Blessing / Seat Distance):
+                {selectedQuestion.id === 'multi3_player_room_number_fail'
+                  ? "Which Room of Target Player?"
+                  : "Parameter (Blessing Slot / Seat Distance):"}
               </label>
-              <div className="flex gap-1.5">
-                {[1, 2, 3, 4, 5].map(num => (
+              <div className="flex flex-wrap gap-1.5">
+                {(selectedQuestion.id === 'multi3_player_room_number_fail' ? [1, 2, 3] : [1, 2, 3, 4, 5]).map(num => (
                   <button
                     key={num}
                     onClick={() => setNumericParam(num)}
@@ -784,7 +795,9 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                         : 'bg-zinc-900 text-zinc-400 border-zinc-800'
                     }`}
                   >
-                    #{num}
+                    {selectedQuestion.id === 'multi3_player_room_number_fail'
+                      ? `${num === 1 ? '1st' : num === 2 ? '2nd' : '3rd'} Room`
+                      : `#${num}`}
                   </button>
                 ))}
               </div>
@@ -988,8 +1001,19 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                   Calculated Outcome:
                 </span>
                 <span className="text-sm font-bold">
-                  {finalOutcome === 'pass' ? 'ROOM PASSED (Give True Answer)' : 'ROOM FAILED (Give False Answer)'}
+                  {isTwistedWhispersSolo
+                    ? (finalOutcome === 'pass'
+                        ? 'ROOM PASSED (GIVE FALSE ANSWER — Twisted Whispers!)'
+                        : 'ROOM FAILED (GIVE TRUE ANSWER — Twisted Whispers!)')
+                    : (finalOutcome === 'pass'
+                        ? 'ROOM PASSED (Give True Answer)'
+                        : 'ROOM FAILED (Give False Answer)')}
                 </span>
+                {isTwistedWhispersSolo && (
+                  <span className="text-[11px] text-purple-300 block font-medium mt-0.5 animate-pulse">
+                    🌀 Twisted Whispers Active: In this player's solo room, Pass gives false information and Fail gives true information!
+                  </span>
+                )}
                 {isSewardForcedPass && (
                   <span className="text-[11px] text-emerald-300 block font-medium mt-0.5">
                     💉 Dr. Seward's Tonic Triggered: Room #{currentRoomNumber} automatically Passes regardless of votes!
@@ -1034,6 +1058,20 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 Storyteller Assistant (Renfield's Oracle)
               </span>
             </div>
+
+            {isTwistedWhispersSolo && (
+              <div className="p-2.5 rounded-lg bg-purple-950/60 border border-purple-700 space-y-1 text-xs text-purple-200">
+                <span className="font-bold flex items-center gap-1.5 text-purple-300">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Twisted Whispers Inversion Active:
+                </span>
+                <p className="text-[11px] leading-snug">
+                  {finalOutcome === 'pass'
+                    ? 'Room Passed: Secretly lie to this player! Give them the Recommended Lie below.'
+                    : 'Room Failed: Secretly tell the truth! Give them the True Answer below.'}
+                </p>
+              </div>
+            )}
 
             {gameState.chosenBlessingId === 3 && (
               <div className="p-2 rounded-lg bg-purple-950/40 border border-purple-800/60 flex items-center gap-2 text-[11px] text-purple-200">

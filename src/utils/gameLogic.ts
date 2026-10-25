@@ -14,12 +14,68 @@ export function getPlayerRealTeam(player: Player): 'good' | 'evil' {
 }
 
 /**
- * Returns player's team for room question purposes, taking into account Blood Corruption.
- * Note: Blood Corruption makes a Good player register as Evil.
+ * Returns player's team for room question purposes, taking into account Blood Corruption,
+ * Dark Veil, Blood Effigy, and Soul Swap.
  */
-export function getPlayerRegisteredTeam(player: Player): 'good' | 'evil' {
-  if (player.isCorrupted) return 'evil';
+export function getPlayerRegisteredTeam(player: Player, gameState?: GameState): 'good' | 'evil' {
+  if (!gameState) {
+    if (player.isCorrupted) return 'evil';
+    return getPlayerRealTeam(player);
+  }
+
+  const { chosenBlessingId, corruptedPlayerId, darkVeilDraculaPlayerId, darkVeilBridePlayerIds, soulSwapGoodPlayerId, soulSwapBridePlayerId } = gameState;
+
+  // Blessing 10: Soul Swap - Good player and Bride swap roles
+  if (chosenBlessingId === 10) {
+    if (player.id === soulSwapGoodPlayerId) return 'evil';
+    if (player.id === soulSwapBridePlayerId) return 'good';
+  }
+
+  // Blessing 9: Dark Veil - Fake Dracula and Fake Brides register as Evil; Real Evil register as Good
+  if (chosenBlessingId === 9) {
+    if (player.id === darkVeilDraculaPlayerId) return 'evil';
+    if (darkVeilBridePlayerIds?.includes(player.id)) return 'evil';
+    if (isEvilRole(player.role)) return 'good';
+    return 'good';
+  }
+
+  // Blessing 8: Blood Effigy - Good player registers as Dracula; real Dracula registers as a Bride.
+  // Both retain their natural team alignments (Effigy is Good; real Dracula is Evil).
+
+  // Blessing 1: Blood Corruption
+  if (player.isCorrupted || (chosenBlessingId === 1 && corruptedPlayerId === player.id)) {
+    return 'evil';
+  }
+
   return getPlayerRealTeam(player);
+}
+
+/**
+ * Returns player's role for room question purposes, taking into account Dark Veil,
+ * Blood Effigy, and Soul Swap.
+ */
+export function getPlayerRegisteredRole(player: Player, gameState?: GameState): RoleType {
+  if (!gameState) return player.role;
+  const { chosenBlessingId, effigyPlayerId, darkVeilDraculaPlayerId, darkVeilBridePlayerIds, soulSwapGoodPlayerId, soulSwapBridePlayerId } = gameState;
+
+  if (chosenBlessingId === 10) {
+    if (player.id === soulSwapGoodPlayerId) return 'bride';
+    if (player.id === soulSwapBridePlayerId) return 'guest';
+  }
+
+  if (chosenBlessingId === 9) {
+    if (player.id === darkVeilDraculaPlayerId) return 'dracula';
+    if (darkVeilBridePlayerIds?.includes(player.id)) return 'bride';
+    if (player.role === 'dracula') return 'guest'; // disguised as Renfield
+    if (player.role === 'bride') return 'guest';
+  }
+
+  if (chosenBlessingId === 8) {
+    if (player.id === effigyPlayerId) return 'dracula';
+    if (player.role === 'dracula') return 'bride';
+  }
+
+  return player.role;
 }
 
 export function getPlayerColor(colorId: string) {
@@ -55,7 +111,24 @@ export interface SeatedEntity {
  */
 export function getSeatedEntities(gameStateOrPlayers: GameState | Player[]): SeatedEntity[] {
   const isGameState = !Array.isArray(gameStateOrPlayers);
-  const rawPlayers = isGameState ? gameStateOrPlayers.players : gameStateOrPlayers;
+  const gameState = isGameState ? gameStateOrPlayers : undefined;
+  let rawPlayers = isGameState ? gameStateOrPlayers.players : gameStateOrPlayers;
+
+  // Blessing 10: Soul Swap - their seating positions are swapped
+  if (gameState && gameState.chosenBlessingId === 10 && gameState.soulSwapGoodPlayerId && gameState.soulSwapBridePlayerId) {
+    const goodP = rawPlayers.find(p => p.id === gameState.soulSwapGoodPlayerId);
+    const brideP = rawPlayers.find(p => p.id === gameState.soulSwapBridePlayerId);
+    if (goodP && brideP) {
+      const goodSeat = goodP.seat;
+      const brideSeat = brideP.seat;
+      rawPlayers = rawPlayers.map(p => {
+        if (p.id === goodP.id) return { ...p, seat: brideSeat };
+        if (p.id === brideP.id) return { ...p, seat: goodSeat };
+        return p;
+      });
+    }
+  }
+
   const players = [...rawPlayers].sort((a, b) => a.seat - b.seat);
   const n = players.length;
   const entities: SeatedEntity[] = [];
@@ -65,12 +138,13 @@ export function getSeatedEntities(gameStateOrPlayers: GameState | Player[]): Sea
 
   for (let i = 0; i < n; i++) {
     const p = players[i];
+    const registeredRole = getPlayerRegisteredRole(p, gameState);
     entities.push({
       type: 'player',
       seatNumber: p.seat,
       playerId: p.id,
-      isDracula: p.role === 'dracula',
-      alignment: getPlayerRegisteredTeam(p),
+      isDracula: registeredRole === 'dracula',
+      alignment: getPlayerRegisteredTeam(p, gameState),
       player: p,
     });
 
@@ -150,7 +224,18 @@ export function countEvilPairs(gameStateOrPlayers: GameState | Player[]): number
 /**
  * Finds Dracula player
  */
-export function getDracula(players: Player[]): Player | undefined {
+/**
+ * Finds Dracula player (accounting for Blood Effigy and Dark Veil)
+ */
+export function getDracula(players: Player[], gameState?: GameState): Player | undefined {
+  if (gameState) {
+    if (gameState.chosenBlessingId === 8 && gameState.effigyPlayerId) {
+      return players.find(p => p.id === gameState.effigyPlayerId);
+    }
+    if (gameState.chosenBlessingId === 9 && gameState.darkVeilDraculaPlayerId) {
+      return players.find(p => p.id === gameState.darkVeilDraculaPlayerId);
+    }
+  }
   return players.find(p => p.role === 'dracula');
 }
 
@@ -172,14 +257,13 @@ export function computeRoomAnswer(
   targetPlayerB?: Player,
   numericParam?: number
 ): RoomAnswerResult {
-  const { players, roomsHistory, chosenBlessingId, selectedHunters } = {
+  const { players, roomsHistory, chosenBlessingId } = {
     players: gameState.players,
     roomsHistory: gameState.roomsHistory,
     chosenBlessingId: gameState.chosenBlessingId,
-    selectedHunters: gameState.settings.selectedHunters,
   };
 
-  const dracula = getDracula(players);
+  const dracula = getDracula(players, gameState);
   const n = players.length;
   const leaderSeat = leader.seat - 1;
 
@@ -187,7 +271,7 @@ export function computeRoomAnswer(
     // --- 1 Heart (Solo) ---
     case 'solo_is_dracula': {
       const target = targetPlayerA || leader;
-      const isDrac = target.role === 'dracula';
+      const isDrac = getPlayerRegisteredRole(target, gameState) === 'dracula';
       return {
         trueAnswer: isDrac ? 'Yes' : 'No',
         recommendedLie: isDrac ? 'No (Protects Dracula!)' : 'Yes (Frames this Good/Bride player as Dracula!)',
@@ -199,7 +283,7 @@ export function computeRoomAnswer(
 
     case 'solo_is_bride': {
       const target = targetPlayerA || leader;
-      const isBride = target.role === 'bride';
+      const isBride = getPlayerRegisteredRole(target, gameState) === 'bride';
       return {
         trueAnswer: isBride ? 'Yes' : 'No',
         recommendedLie: isBride ? 'No' : 'Yes',
@@ -211,7 +295,7 @@ export function computeRoomAnswer(
 
     case 'solo_is_good': {
       const target = targetPlayerA || leader;
-      const isGood = getPlayerRegisteredTeam(target) === 'good';
+      const isGood = getPlayerRegisteredTeam(target, gameState) === 'good';
       return {
         trueAnswer: isGood ? 'Yes' : 'No',
         recommendedLie: isGood ? 'No' : 'Yes',
@@ -223,7 +307,7 @@ export function computeRoomAnswer(
 
     case 'solo_is_evil': {
       const target = targetPlayerA || leader;
-      const isEvil = getPlayerRegisteredTeam(target) === 'evil';
+      const isEvil = getPlayerRegisteredTeam(target, gameState) === 'evil';
       return {
         trueAnswer: isEvil ? 'Yes' : 'No',
         recommendedLie: isEvil ? 'No' : 'Yes',
@@ -234,7 +318,7 @@ export function computeRoomAnswer(
     case 'solo_different_teams': {
       const pA = targetPlayerA || leader;
       const pB = targetPlayerB || (players.find(p => p.id !== pA.id) || leader);
-      const diff = getPlayerRegisteredTeam(pA) !== getPlayerRegisteredTeam(pB);
+      const diff = getPlayerRegisteredTeam(pA, gameState) !== getPlayerRegisteredTeam(pB, gameState);
       return {
         trueAnswer: diff ? 'Yes' : 'No',
         recommendedLie: diff ? 'No' : 'Yes',
@@ -247,7 +331,7 @@ export function computeRoomAnswer(
     case 'solo_both_evil': {
       const pA = targetPlayerA || leader;
       const pB = targetPlayerB || leader;
-      const bothEvil = getPlayerRegisteredTeam(pA) === 'evil' && getPlayerRegisteredTeam(pB) === 'evil';
+      const bothEvil = getPlayerRegisteredTeam(pA, gameState) === 'evil' && getPlayerRegisteredTeam(pB, gameState) === 'evil';
       return {
         trueAnswer: bothEvil ? 'Yes' : 'No',
         recommendedLie: bothEvil ? 'No' : 'Yes',
@@ -258,7 +342,7 @@ export function computeRoomAnswer(
     case 'solo_both_good': {
       const pA = targetPlayerA || leader;
       const pB = targetPlayerB || leader;
-      const bothGood = getPlayerRegisteredTeam(pA) === 'good' && getPlayerRegisteredTeam(pB) === 'good';
+      const bothGood = getPlayerRegisteredTeam(pA, gameState) === 'good' && getPlayerRegisteredTeam(pB, gameState) === 'good';
       return {
         trueAnswer: bothGood ? 'Yes' : 'No',
         recommendedLie: bothGood ? 'No' : 'Yes',
@@ -327,7 +411,7 @@ export function computeRoomAnswer(
       const hasEvil = lastRoom
         ? lastRoom.participantPlayerIds.some(id => {
             const p = players.find(x => x.id === id);
-            return p && getPlayerRegisteredTeam(p) === 'evil';
+            return p && getPlayerRegisteredTeam(p, gameState) === 'evil';
           })
         : false;
       return {
@@ -337,26 +421,49 @@ export function computeRoomAnswer(
       };
     }
 
+    case 'solo_player_passed_rooms_prior': {
+      const target = targetPlayerA || leader;
+      const hasPassed = roomsHistory.some(r => r.participantPlayerIds.includes(target.id) && r.outcome === 'pass');
+      return {
+        trueAnswer: hasPassed ? 'Yes' : 'No',
+        recommendedLie: hasPassed ? 'No' : 'Yes',
+        lieReasoning: hasPassed ? 'Hides player’s clean track record.' : 'Falsely grants player a pass credit.',
+      };
+    }
+
+    case 'solo_player_failed_rooms_prior': {
+      const target = targetPlayerA || leader;
+      const hasFailed = roomsHistory.some(r => r.participantPlayerIds.includes(target.id) && r.outcome === 'fail');
+      return {
+        trueAnswer: hasFailed ? 'Yes' : 'No',
+        recommendedLie: hasFailed ? 'No' : 'Yes',
+        lieReasoning: hasFailed ? 'Protects player from failed room scrutiny.' : 'Falsely taints player with failed room history.',
+      };
+    }
+
+    case 'solo_shared_room_with_dracula': {
+      const shared = Boolean(
+        dracula &&
+        roomsHistory.some(r => r.participantPlayerIds.includes(leader.id) && r.participantPlayerIds.includes(dracula.id))
+      );
+      return {
+        trueAnswer: shared ? 'Yes' : 'No',
+        recommendedLie: shared ? 'No' : 'Yes',
+        lieReasoning: shared ? 'Distances leader from Dracula.' : 'Falsely links leader with Dracula.',
+      };
+    }
+
     case 'solo_blessing_in_play': {
       const bNum = numericParam || 1;
-      const inPlay = chosenBlessingId === bNum;
+      const activeIds = gameState.settings.selectedBlessingIds && gameState.settings.selectedBlessingIds.length === 5
+        ? gameState.settings.selectedBlessingIds
+        : [1, 2, 3, 4, 5];
+      const targetBlessingId = activeIds[bNum - 1];
+      const inPlay = chosenBlessingId === targetBlessingId;
       return {
         trueAnswer: inPlay ? 'Yes' : 'No',
         recommendedLie: inPlay ? 'No' : 'Yes',
         lieReasoning: inPlay ? 'Conceals Dracula’s Dark Blessing.' : 'Bluffs an unused blessing.',
-      };
-    }
-
-    case 'solo_is_hunter': {
-      const target = targetPlayerA || leader;
-      const isHunter = target.role === 'hunter';
-      // If Evil player used room, rule note: Evil players using this room always learn "No"
-      const isEvilExplorer = participants.some(p => isEvilRole(p.role));
-      const trueAns = isEvilExplorer ? 'No' : isHunter ? 'Yes' : 'No';
-      return {
-        trueAnswer: trueAns,
-        recommendedLie: isHunter ? 'No' : 'Yes',
-        lieReasoning: isHunter ? 'Hides hunter identity.' : 'Bait Dracula into shooting a non-hunter.',
       };
     }
 
@@ -396,31 +503,11 @@ export function computeRoomAnswer(
       };
     }
 
-    case 'solo_evil_in_room_after': {
+    case 'solo_yes_no_freeform': {
       return {
-        trueAnswer: 'No',
-        recommendedLie: 'Yes',
-        lieReasoning: 'Subsequent room has not occurred yet.',
-      };
-    }
-
-    case 'solo_room_after_fail': {
-      return {
-        trueAnswer: 'No',
-        recommendedLie: 'Yes',
-        lieReasoning: 'Subsequent room has not occurred yet.',
-      };
-    }
-
-    case 'solo_hunter_in_play': {
-      const hNum = numericParam || 1;
-      const hunterMap = ['van_helsing', 'jonathan_harker', 'mina_harker', 'quincey_morris', 'dr_john_seward'] as const;
-      const targetHunter = hunterMap[hNum - 1];
-      const inPlay = selectedHunters.includes(targetHunter);
-      return {
-        trueAnswer: inPlay ? 'Yes' : 'No',
-        recommendedLie: inPlay ? 'No' : 'Yes',
-        lieReasoning: inPlay ? 'Hides hunter roster.' : 'Misleads on hunter roles.',
+        trueAnswer: 'Evaluate condition truthfully',
+        recommendedLie: 'Give plausible lie advantageous to Evil',
+        lieReasoning: 'Renfield answers truthfully on Pass, or gives a helpful lie on Fail.',
       };
     }
 
@@ -576,24 +663,28 @@ export function computeRoomAnswer(
       };
     }
 
-    case 'multi2_dracula_evil_neighbors': {
-      if (!dracula) return { trueAnswer: '0', recommendedLie: '1', lieReasoning: '' };
+    case 'multi2_any_next_to_two_evil': {
       const entities = getSeatedEntities(gameState);
       const m = entities.length;
-      const dracIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === dracula.id);
-      let count = 0;
-      if (dracIdx !== -1) {
-        const left = (dracIdx - 1 + m) % m;
-        const right = (dracIdx + 1) % m;
-        if (entities[left].alignment === 'evil') count++;
-        if (entities[right].alignment === 'evil') count++;
+      let found = false;
+      if (m >= 3) {
+        for (let i = 0; i < m; i++) {
+          if (entities[i].type === 'player') {
+            const left = entities[(i - 1 + m) % m];
+            const right = entities[(i + 1) % m];
+            if (left.alignment === 'evil' && right.alignment === 'evil') {
+              found = true;
+              break;
+            }
+          }
+        }
       }
-      const trueAns = String(count);
-      const lie = count === 0 ? '1' : '0';
       return {
-        trueAnswer: trueAns,
-        recommendedLie: lie,
-        lieReasoning: `True count is ${trueAns}. Lie helps disguise Dracula’s surroundings.`,
+        trueAnswer: found ? 'Yes' : 'No',
+        recommendedLie: found ? 'No' : 'Yes',
+        lieReasoning: found
+          ? 'Conceals that a player is bracketed by 2 Evil entities.'
+          : 'Creates false suspicion of sandwiching.',
       };
     }
 
@@ -602,16 +693,16 @@ export function computeRoomAnswer(
       const entities = getSeatedEntities(gameState);
       const m = entities.length;
       const dracIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === dracula.id);
-      const nextTo = participants.some(p => {
-        const pIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === p.id);
-        if (pIdx === -1 || dracIdx === -1) return false;
-        const dist = Math.min((pIdx - dracIdx + m) % m, (dracIdx - pIdx + m) % m);
-        return dist === 1;
-      });
+      const leaderIdx = entities.findIndex(e => e.type === 'player' && e.player?.id === leader.id);
+      let nextTo = false;
+      if (dracIdx !== -1 && leaderIdx !== -1) {
+        const dist = Math.min((leaderIdx - dracIdx + m) % m, (dracIdx - leaderIdx + m) % m);
+        nextTo = dist === 1;
+      }
       return {
         trueAnswer: nextTo ? 'Yes' : 'No',
         recommendedLie: nextTo ? 'No' : 'Yes',
-        lieReasoning: nextTo ? 'Distances participants from Dracula.' : 'Frames an innocent as next to Dracula.',
+        lieReasoning: nextTo ? 'Distances leader from Dracula.' : 'Frames an innocent as next to Dracula.',
       };
     }
 
@@ -751,19 +842,6 @@ export function computeRoomAnswer(
       };
     }
 
-    case 'multi3_second_largest_good': {
-      const groups = getGoodGroups(gameState);
-      const second = groups[1] || 0;
-      const trueAns = second >= 8 ? '8+' : String(second);
-      const lie = second === 0 ? '1' : String(Math.max(0, second - 1));
-      return {
-        trueAnswer: trueAns,
-        recommendedLie: lie,
-        lieReasoning: chosenBlessingId === 3
-          ? `True 2nd largest group is ${second} (Blessing #3 Restless Spirits factored in).`
-          : `True 2nd largest group is ${second}.`,
-      };
-    }
 
     case 'multi3_dracula_closer_cw_ccw': {
       if (!dracula) return { trueAnswer: 'Clockwise', recommendedLie: 'Counter Clockwise', lieReasoning: '' };
@@ -806,24 +884,6 @@ export function computeRoomAnswer(
       };
     }
 
-    case 'multi3_how_far_back_failed': {
-      let stepsBack = 0;
-      let found = false;
-      for (let i = roomsHistory.length - 1; i >= 0; i--) {
-        stepsBack++;
-        if (roomsHistory[i].outcome === 'fail') {
-          found = true;
-          break;
-        }
-      }
-      const trueAns = !found ? 'None' : stepsBack >= 9 ? '9+' : String(stepsBack);
-      const lie = !found ? '1' : 'None';
-      return {
-        trueAnswer: trueAns,
-        recommendedLie: lie,
-        lieReasoning: `True is ${trueAns}. Conceals how recently rooms were disrupted.`,
-      };
-    }
 
     case 'multi3_total_rooms_failed': {
       const failedCount = roomsHistory.filter(r => r.outcome === 'fail').length;
@@ -977,13 +1037,17 @@ export function computeRoomAnswer(
     }
 
     case 'multi2_blessing_x_or_y': {
-      const inPlay = chosenBlessingId === numericParam;
+      const activeIds = gameState.settings.selectedBlessingIds && gameState.settings.selectedBlessingIds.length === 5
+        ? gameState.settings.selectedBlessingIds
+        : [1, 2, 3, 4, 5];
+      const targetBlessingId = activeIds[(numericParam || 1) - 1] ?? numericParam;
+      const inPlay = chosenBlessingId === targetBlessingId;
       return {
         trueAnswer: inPlay ? 'Yes' : 'No',
         recommendedLie: inPlay ? 'No' : 'Yes',
         lieReasoning: inPlay
-          ? `Dark Blessing #${numericParam} is in play.`
-          : `Dark Blessing #${numericParam} is NOT in play.`,
+          ? `Dark Blessing #${targetBlessingId} is in play.`
+          : `Dark Blessing #${targetBlessingId} is NOT in play.`,
       };
     }
 
@@ -996,14 +1060,6 @@ export function computeRoomAnswer(
         lieReasoning: dracInLast
           ? 'Protects Dracula from tracking across rooms.'
           : 'Falsely frames a participant in the last room as Dracula.',
-      };
-    }
-
-    case 'multi2_dracula_room_after': {
-      return {
-        trueAnswer: 'No',
-        recommendedLie: 'Yes',
-        lieReasoning: 'Subsequent room has not been chosen yet.',
       };
     }
 
@@ -1029,7 +1085,7 @@ export function computeRoomAnswer(
       const hadMultiEvil = roomsHistory.some(r => {
         const evils = r.participantPlayerIds.filter(id => {
           const p = players.find(pl => pl.id === id);
-          return p && getPlayerRegisteredTeam(p) === 'evil';
+          return p && getPlayerRegisteredTeam(p, gameState) === 'evil';
         });
         return evils.length > 1;
       });
@@ -1065,31 +1121,62 @@ export function computeRoomAnswer(
       };
     }
 
-    case 'multi3_yes_no_freeform': {
+    case 'multi3_is_dracula_among_them': {
+      const targets = [targetPlayerA, targetPlayerB].filter(Boolean) as Player[];
+      const checkList = targets.length > 0 ? targets : participants;
+      const among = Boolean(dracula && checkList.some(p => p.id === dracula.id));
       return {
-        trueAnswer: 'Evaluate condition',
-        recommendedLie: 'Give believable opposite',
-        lieReasoning: 'Renfield gives plausible lie beneficial to Evil.',
+        trueAnswer: among ? 'Yes' : 'No',
+        recommendedLie: among ? 'No' : 'Yes',
+        lieReasoning: among ? 'Hides Dracula among the suspects.' : 'Falsely confirms Dracula in the group.',
       };
     }
 
-    case 'multi3_room_after_fail_who': {
-      const lastRoom = roomsHistory[roomsHistory.length - 1];
-      if (!lastRoom || lastRoom.outcome !== 'fail') {
-        return {
-          trueAnswer: 'No',
-          recommendedLie: 'Yes (Name a good player)',
-          lieReasoning: 'Frames an innocent explorer.',
-        };
-      }
-      const failers = Object.entries(lastRoom.votes)
-        .filter(([, v]) => v === 'fail')
-        .map(([id]) => players.find(p => p.id === id)?.name || id);
-      const trueAns = `Yes (${failers.join(', ') || 'Unknown'})`;
+    case 'multi3_players_all_voted_pass_prior': {
+      const targets = [targetPlayerA, targetPlayerB].filter(Boolean) as Player[];
+      const checkList = targets.length > 0 ? targets : participants;
+      const allVotedPass = checkList.every(p => {
+        const pRooms = roomsHistory.filter(r => r.participantPlayerIds.includes(p.id));
+        return pRooms.length > 0 && pRooms.every(r => r.votes[p.id] === 'pass');
+      });
       return {
-        trueAnswer: trueAns,
-        recommendedLie: 'No',
-        lieReasoning: 'Lulls hunters into believing the prior room passed.',
+        trueAnswer: allVotedPass ? 'Yes' : 'No',
+        recommendedLie: allVotedPass ? 'No' : 'Yes',
+        lieReasoning: allVotedPass ? 'Casts suspicion on consistent pass voters.' : 'Covers up sabotage votes.',
+      };
+    }
+
+    case 'multi3_players_all_in_failed_room_prior': {
+      const targets = [targetPlayerA, targetPlayerB].filter(Boolean) as Player[];
+      const checkList = targets.length > 0 ? targets : participants;
+      const allInFailed = checkList.every(p =>
+        roomsHistory.some(r => r.participantPlayerIds.includes(p.id) && r.outcome === 'fail')
+      );
+      return {
+        trueAnswer: allInFailed ? 'Yes' : 'No',
+        recommendedLie: allInFailed ? 'No' : 'Yes',
+        lieReasoning: allInFailed ? 'Exonerates players from failed room links.' : 'Taints players with false failure ties.',
+      };
+    }
+
+    case 'multi3_player_room_number_fail': {
+      const target = targetPlayerA || leader;
+      const targetRooms = roomsHistory.filter(r => r.participantPlayerIds.includes(target.id));
+      const roomIdx = (numericParam || 1) - 1;
+      const room = targetRooms[roomIdx];
+      const failed = Boolean(room && room.outcome === 'fail');
+      return {
+        trueAnswer: failed ? 'Yes' : 'No',
+        recommendedLie: failed ? 'No' : 'Yes',
+        lieReasoning: failed ? 'Protects player’s past room from scrutiny.' : 'Falsely claims player failed their room.',
+      };
+    }
+
+    case 'multi3_yes_no_freeform': {
+      return {
+        trueAnswer: 'Evaluate condition truthfully',
+        recommendedLie: 'Give plausible lie advantageous to Evil',
+        lieReasoning: 'Renfield answers truthfully on Pass, or gives a helpful lie on Fail.',
       };
     }
 

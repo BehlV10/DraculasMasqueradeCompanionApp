@@ -15,10 +15,11 @@ export type HunterType =
   | 'quincey_morris' 
   | 'dr_john_seward';
 
-export type DarkBlessingId = 1 | 2 | 3 | 4 | 5;
+export type DarkBlessingId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 export interface DarkBlessing {
   id: DarkBlessingId;
+  set: 1 | 2;
   name: string;
   description: string;
   shortEffect: string;
@@ -87,6 +88,7 @@ export interface RestlessSpirit {
 export interface GameSettings {
   playerCount: number;
   selectedHunters: HunterType[];
+  selectedBlessingIds: DarkBlessingId[]; // 5 chosen out of 10
   explorationTimeMinutes: number;
   finaleTimeMinutes: number;
 }
@@ -106,6 +108,14 @@ export interface GameState {
   sewardRoomNumber: number | null;
   echoingCurseActive: boolean; // next room fails if true
   echoingCurseDraculaVotedFail: boolean;
+  // Set 2 Blessings State
+  twistedPlayerId?: string | null; // Blessing 6: Twisted Whispers
+  wingedHunterId?: string | null; // Blessing 7: Winged Spies
+  effigyPlayerId?: string | null; // Blessing 8: Blood Effigy
+  darkVeilDraculaPlayerId?: string | null; // Blessing 9: Dark Veil fake Dracula
+  darkVeilBridePlayerIds?: string[]; // Blessing 9: Dark Veil fake Brides
+  soulSwapGoodPlayerId?: string | null; // Blessing 10: Soul Swap Good player
+  soulSwapBridePlayerId?: string | null; // Blessing 10: Soul Swap Bride player
   roomsHistory: RoomLogEntry[];
   huntingPartyPlayerIds: string[];
   revealedRoles: Record<string, 'good' | 'evil'>;

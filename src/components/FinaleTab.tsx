@@ -134,24 +134,48 @@ export const FinaleTab: React.FC<FinaleTabProps> = ({ gameState, setGameState })
 
   // Shoot Dracula
   const handleShootPlayer = (targetId: string) => {
-    const target = players.find(p => p.id === targetId);
-    if (!target) return;
+    let isCorrectShot = false;
+    let targetName = '';
 
-    const isDracula = target.role === 'dracula';
+    if (gameState.chosenBlessingId === 8) {
+      isCorrectShot = targetId === gameState.effigyPlayerId;
+      const target = players.find(p => p.id === targetId);
+      targetName = target ? `${target.name} (${getPlayerColor(target.colorId).name})` : 'Unknown';
+    } else if (gameState.chosenBlessingId === 9) {
+      isCorrectShot = targetId === 'renfield';
+      if (targetId === 'renfield') {
+        targetName = 'Renfield (Host / Real Dracula)';
+      } else {
+        const target = players.find(p => p.id === targetId);
+        targetName = target ? `${target.name} (${getPlayerColor(target.colorId).name})` : 'Unknown';
+      }
+    } else {
+      const target = players.find(p => p.id === targetId);
+      if (!target) return;
+      isCorrectShot = target.role === 'dracula';
+      targetName = `${target.name} (${getPlayerColor(target.colorId).name})`;
+    }
 
-    if (!isDracula) {
+    if (!isCorrectShot) {
       // Evil wins!
       playVictorySound(false);
+      let failReason = `The Hunting Party shot ${targetName}, who is NOT Dracula! Evil wins!`;
+      if (gameState.chosenBlessingId === 8) {
+        failReason = `The Hunting Party shot ${targetName}, but Dark Blessing #8 (Blood Effigy) was in play! Hunters had to shoot the Effigy player to win. Evil wins!`;
+      } else if (gameState.chosenBlessingId === 9) {
+        failReason = `The Hunting Party shot ${targetName}, but Dark Blessing #9 (Dark Veil) was in play! Dracula was disguised as Renfield. Hunters had to shoot Renfield to win. Evil wins!`;
+      }
       setGameState(prev => ({
         ...prev,
         shotPlayerId: targetId,
         winner: 'evil',
-        winReason: `The Hunting Party shot ${target.name} (${getPlayerColor(target.colorId).name}), who is NOT Dracula! Evil wins!`,
+        winReason: failReason,
         phase: 'game_over',
       }));
     } else {
-      // Dracula shot!
-      if (isFivePlayerGame) {
+      // Target shot!
+      const allowsLastChance = !isFivePlayerGame || gameState.chosenBlessingId === 7;
+      if (!allowsLastChance) {
         // 5-player game skips step 3: Good wins immediately!
         playVictorySound(true);
         confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
@@ -159,7 +183,7 @@ export const FinaleTab: React.FC<FinaleTabProps> = ({ gameState, setGameState })
           ...prev,
           shotPlayerId: targetId,
           winner: 'good',
-          winReason: `Dracula (${target.name}) was successfully shot! In a 5-player game, Good wins immediately!`,
+          winReason: `Dracula (${targetName}) was successfully shot! In a 5-player game, Good wins immediately!`,
           phase: 'game_over',
         }));
       } else {
@@ -428,6 +452,18 @@ export const FinaleTab: React.FC<FinaleTabProps> = ({ gameState, setGameState })
             The last player to join the party ({lastHunterMember?.name}) holds the Crossbow and chooses one suspect to shoot! Renfield asks: <em className="text-rose-300 font-semibold">"Is that your final answer?"</em>
           </p>
 
+          {gameState.chosenBlessingId === 8 && (
+            <div className="p-2.5 rounded-xl bg-purple-950/60 border border-purple-700 text-xs text-purple-200">
+              🩸 <strong className="text-purple-300">Blood Effigy Active:</strong> Good must shoot the Blood Effigy player ({players.find(p => p.id === gameState.effigyPlayerId)?.name || 'Effigy'}) instead of Dracula to win!
+            </div>
+          )}
+
+          {gameState.chosenBlessingId === 9 && (
+            <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-700 text-xs text-red-200">
+              🌑 <strong className="text-red-300">Dark Veil Active:</strong> Dracula is disguised as Renfield! Good must declare they shoot Renfield (the host) to win!
+            </div>
+          )}
+
           {!shotPlayerId ? (
             <div className="space-y-1.5">
               <span className="text-[11px] font-semibold text-zinc-400 block uppercase">
@@ -452,13 +488,25 @@ export const FinaleTab: React.FC<FinaleTabProps> = ({ gameState, setGameState })
                     </button>
                   );
                 })}
+
+                {gameState.chosenBlessingId === 9 && (
+                  <button
+                    onClick={() => handleShootPlayer('renfield')}
+                    className="p-2 rounded-xl bg-purple-950/80 border border-purple-600 hover:border-purple-400 flex items-center gap-2 text-xs font-bold text-purple-100 transition-all text-left shadow-sm"
+                  >
+                    <span className="w-5 h-5 rounded font-mono text-[10px] bg-purple-800 text-purple-200 flex items-center justify-center flex-shrink-0">
+                      👑
+                    </span>
+                    <span className="truncate">Renfield (Host / Storyteller)</span>
+                  </button>
+                )}
               </div>
             </div>
           ) : (
             <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-700 text-xs text-emerald-200 flex items-center justify-between">
               <div>
                 <span className="block font-bold text-emerald-300">
-                  Target Shot: {players.find(p => p.id === shotPlayerId)?.name}
+                  Target Shot: {shotPlayerId === 'renfield' ? 'Renfield (Host / Real Dracula)' : players.find(p => p.id === shotPlayerId)?.name}
                 </span>
                 <span>Dracula was shot! Proceeding to Dracula's Last Chance.</span>
               </div>
@@ -469,7 +517,7 @@ export const FinaleTab: React.FC<FinaleTabProps> = ({ gameState, setGameState })
       )}
 
       {/* STEP 3: DRACULA'S LAST CHANCE */}
-      {shotPlayerId && !isFivePlayerGame && !winner && (
+      {shotPlayerId && (!isFivePlayerGame || gameState.chosenBlessingId === 7) && !winner && (
         <div className="bg-[#10111d] rounded-2xl border border-rose-950/40 p-3 sm:p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">

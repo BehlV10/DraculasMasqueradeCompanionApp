@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DarkBlessingId, GameState, HunterType, Player, RestlessSpirit } from '../types/game';
+import { DarkBlessingId, GameState, HunterType, RestlessSpirit } from '../types/game';
 import { DARK_BLESSINGS, HUNTERS } from '../data/gameData';
 import { getPlayerColor } from '../utils/gameLogic';
 import { Moon, Eye, EyeOff, Sparkles, AlertTriangle, ArrowRight, CheckCircle2, Ghost } from 'lucide-react';
@@ -16,7 +16,31 @@ export const NightTab: React.FC<NightTabProps> = ({
   setGameState,
   onFinishNight,
 }) => {
-  const { players, chosenBlessingId, excludedBlessingId, corruptedPlayerId, puppetPlayerId, restlessSpirits } = gameState;
+  const {
+    players,
+    chosenBlessingId,
+    excludedBlessingId,
+    corruptedPlayerId,
+    puppetPlayerId,
+    restlessSpirits,
+    twistedPlayerId,
+    wingedHunterId,
+    effigyPlayerId,
+    darkVeilDraculaPlayerId,
+    darkVeilBridePlayerIds,
+    soulSwapGoodPlayerId,
+    soulSwapBridePlayerId,
+  } = gameState;
+
+  // Active pool of 5 Dark Blessings (Set 1, Set 2, or customized)
+  const activeBlessingIds = gameState.settings.selectedBlessingIds && gameState.settings.selectedBlessingIds.length === 5
+    ? gameState.settings.selectedBlessingIds
+    : ([1, 2, 3, 4, 5] as DarkBlessingId[]);
+
+  const activeBlessings = activeBlessingIds
+    .map(id => DARK_BLESSINGS.find(b => b.id === id)!)
+    .filter(Boolean);
+
   const dracula = players.find(p => p.role === 'dracula');
   const brides = players.filter(p => p.role === 'bride');
   const huntersInPlay = players.filter(p => p.role === 'hunter');
@@ -131,6 +155,13 @@ export const NightTab: React.FC<NightTabProps> = ({
         corruptedPlayerId: bId === 1 ? prev.corruptedPlayerId : null,
         puppetPlayerId: bId === 2 ? prev.puppetPlayerId : null,
         shadowRoomNumber: bId === 5 ? prev.shadowRoomNumber : null,
+        twistedPlayerId: bId === 6 ? prev.twistedPlayerId : null,
+        wingedHunterId: bId === 7 ? prev.wingedHunterId : null,
+        effigyPlayerId: bId === 8 ? prev.effigyPlayerId : null,
+        darkVeilDraculaPlayerId: bId === 9 ? prev.darkVeilDraculaPlayerId : null,
+        darkVeilBridePlayerIds: bId === 9 ? (prev.darkVeilBridePlayerIds || []) : [],
+        soulSwapGoodPlayerId: bId === 10 ? prev.soulSwapGoodPlayerId : null,
+        soulSwapBridePlayerId: bId === 10 ? prev.soulSwapBridePlayerId : null,
         players: cleanedPlayers,
         restlessSpirits: bId === 3 ? nextSpirits : prev.restlessSpirits,
       };
@@ -222,6 +253,68 @@ export const NightTab: React.FC<NightTabProps> = ({
         ...p,
         isPuppet: p.id === playerId,
       })),
+    }));
+  };
+
+  // Set Twisted Whispers target (Blessing 6)
+  const handleSetTwistedPlayer = (playerId: string) => {
+    setGameState(prev => ({
+      ...prev,
+      twistedPlayerId: playerId,
+    }));
+  };
+
+  // Set Winged Spies target hunter (Blessing 7)
+  const handleSetWingedHunter = (hunterId: string) => {
+    setGameState(prev => ({
+      ...prev,
+      wingedHunterId: hunterId,
+    }));
+  };
+
+  // Set Blood Effigy target (Blessing 8)
+  const handleSetEffigyPlayer = (playerId: string) => {
+    setGameState(prev => ({
+      ...prev,
+      effigyPlayerId: playerId,
+    }));
+  };
+
+  // Set Dark Veil Fake Dracula (Blessing 9)
+  const handleSetDarkVeilDracula = (playerId: string) => {
+    setGameState(prev => ({
+      ...prev,
+      darkVeilDraculaPlayerId: playerId,
+    }));
+  };
+
+  // Toggle Dark Veil Fake Bride (Blessing 9)
+  const handleToggleDarkVeilBride = (playerId: string) => {
+    setGameState(prev => {
+      const current = prev.darkVeilBridePlayerIds || [];
+      const updated = current.includes(playerId)
+        ? current.filter(id => id !== playerId)
+        : [...current, playerId];
+      return {
+        ...prev,
+        darkVeilBridePlayerIds: updated,
+      };
+    });
+  };
+
+  // Set Soul Swap Good Player (Blessing 10)
+  const handleSetSoulSwapGood = (playerId: string) => {
+    setGameState(prev => ({
+      ...prev,
+      soulSwapGoodPlayerId: playerId,
+    }));
+  };
+
+  // Set Soul Swap Bride (Blessing 10)
+  const handleSetSoulSwapBride = (playerId: string) => {
+    setGameState(prev => ({
+      ...prev,
+      soulSwapBridePlayerId: playerId,
     }));
   };
 
@@ -342,8 +435,9 @@ export const NightTab: React.FC<NightTabProps> = ({
         </p>
 
         <div className="grid grid-cols-1 gap-2">
-          {DARK_BLESSINGS.map(b => {
+          {activeBlessings.map((b, idx) => {
             const isSelected = chosenBlessingId === b.id;
+            const fingerCount = idx + 1;
             return (
               <div
                 key={b.id}
@@ -357,10 +451,10 @@ export const NightTab: React.FC<NightTabProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-purple-900 border border-purple-700 text-purple-200 text-xs font-mono font-bold flex items-center justify-center">
-                      {b.id}
+                      {fingerCount}
                     </span>
                     <span className={`text-xs font-bold ${isSelected ? 'text-purple-100' : 'text-zinc-200'}`}>
-                      {b.name}
+                      {b.name} <span className="text-[10px] text-purple-400 font-mono">(Slot #{fingerCount} • ID #{b.id})</span>
                     </span>
                   </div>
                   {isSelected && <CheckCircle2 className="w-4 h-4 text-purple-400" />}
@@ -679,6 +773,264 @@ export const NightTab: React.FC<NightTabProps> = ({
             )}
           </div>
         )}
+
+        {/* Blessing 6: Twisted Whispers Setup */}
+        {chosenBlessingId === 6 && (
+          <div className="mt-3 p-3 rounded-xl bg-purple-950/30 border border-purple-800 space-y-2">
+            <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Twisted Whispers Setup: Select player whose solo rooms are inverted
+            </span>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              Dracula points to 1 player. In their 1-person Room, a Pass gives false information and a Fail gives true information!
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {players.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => handleSetTwistedPlayer(p.id)}
+                  className={`px-2 py-1 rounded-lg text-xs font-medium border ${
+                    twistedPlayerId === p.id
+                      ? 'bg-purple-700 text-white border-purple-500 shadow-sm'
+                      : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                  }`}
+                >
+                  {p.name} ({getPlayerColor(p.colorId).name})
+                </button>
+              ))}
+            </div>
+            {twistedPlayerId && (
+              <div className="p-2 rounded-lg bg-purple-950/50 border border-purple-700 text-xs text-purple-200">
+                🌀 {players.find(p => p.id === twistedPlayerId)?.name} is designated! In their 1-person rooms, Pass will give a lie and Fail will give truth.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Blessing 7: Winged Spies Setup */}
+        {chosenBlessingId === 7 && (
+          <div className="mt-3 p-3 rounded-xl bg-purple-950/30 border border-purple-800 space-y-2.5">
+            <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Winged Spies Setup: Dracula learns all Hunters & chooses 1 to deceive
+            </span>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              Show Dracula who the Hunters are. Dracula secretly points to 1 Hunter to receive false information during their wake-up step!
+            </p>
+            {/* Show all hunters to Dracula */}
+            <div className="p-2 rounded-lg bg-zinc-950/80 border border-zinc-800 text-xs space-y-1">
+              <span className="text-[10px] uppercase font-bold text-zinc-400 block">
+                Hunters in play (Show to Dracula):
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {huntersInPlay.length > 0 ? (
+                  huntersInPlay.map(h => {
+                    const hInfo = HUNTERS.find(item => item.id === h.hunterType);
+                    const col = getPlayerColor(h.colorId);
+                    return (
+                      <span key={h.id} className="px-2 py-1 rounded bg-blue-950/80 border border-blue-800 text-blue-200 font-medium">
+                        {h.name} ({col.name}, Seat {h.seat}) — {hInfo?.name}
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span className="text-zinc-500 italic">No Hunters in play (5-player game)</span>
+                )}
+              </div>
+            </div>
+
+            {huntersInPlay.length > 0 && (
+              <div>
+                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
+                  Choose Hunter to receive false information:
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {huntersInPlay.map(h => (
+                    <button
+                      key={h.id}
+                      onClick={() => handleSetWingedHunter(h.id)}
+                      className={`px-2 py-1 rounded-lg text-xs font-medium border ${
+                        wingedHunterId === h.id
+                          ? 'bg-rose-700 text-white border-rose-500 shadow-sm'
+                          : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                      }`}
+                    >
+                      {h.name} ({getPlayerColor(h.colorId).name})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {wingedHunterId && (
+              <div className="p-2 rounded-lg bg-rose-950/50 border border-rose-700 text-xs text-rose-200">
+                🦅 {players.find(p => p.id === wingedHunterId)?.name} will receive FALSE information in Step 4!
+              </div>
+            )}
+            {gameState.settings.playerCount === 5 && (
+              <p className="text-[11px] text-amber-300 italic">
+                ⭐ At 5 players: Winged Spies allows Evil to win through Dracula's Last Chance during the Finale!
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Blessing 8: Blood Effigy Setup */}
+        {chosenBlessingId === 8 && (
+          <div className="mt-3 p-3 rounded-xl bg-purple-950/30 border border-purple-800 space-y-2">
+            <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Blood Effigy Setup: Select Good player to register as Dracula
+            </span>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              Dracula chooses a Good player. In room questions, they register as Good and as Dracula! Real Dracula registers as Evil and as a Bride. To win, Hunters must shoot this Effigy player instead of Dracula!
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {goodPlayers.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => handleSetEffigyPlayer(p.id)}
+                  className={`px-2 py-1 rounded-lg text-xs font-medium border ${
+                    effigyPlayerId === p.id
+                      ? 'bg-rose-700 text-white border-rose-500 shadow-sm'
+                      : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                  }`}
+                >
+                  {p.name} ({getPlayerColor(p.colorId).name})
+                </button>
+              ))}
+            </div>
+            {effigyPlayerId && (
+              <div className="p-2 rounded-lg bg-rose-950/50 border border-rose-700 text-xs text-rose-200">
+                🩸 {players.find(p => p.id === effigyPlayerId)?.name} is the Blood Effigy! In room questions they register as Dracula, and real Dracula registers as a Bride. Good must shoot this player to win!
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Blessing 9: Dark Veil Setup */}
+        {chosenBlessingId === 9 && (
+          <div className="mt-3 p-3 rounded-xl bg-purple-950/30 border border-purple-800 space-y-2.5">
+            <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Dark Veil Setup: Dracula disguised as Renfield!
+            </span>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              Dracula chooses Good players equal to the number of Evil players ({brides.length + 1}). One registers as Dracula; the other(s) register as Brides. All actual Evil players register as Good. Dracula is disguised as Renfield — Good must shoot Renfield to win!
+            </p>
+
+            <div>
+              <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
+                Select Good player who registers as Dracula:
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {goodPlayers.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSetDarkVeilDracula(p.id)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium border ${
+                      darkVeilDraculaPlayerId === p.id
+                        ? 'bg-red-700 text-white border-red-500 shadow-sm'
+                        : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {p.name} ({getPlayerColor(p.colorId).name})
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {brides.length > 0 && (
+              <div>
+                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
+                  Select Good player(s) who register as Brides (Select {brides.length}):
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {goodPlayers.filter(p => p.id !== darkVeilDraculaPlayerId).map(p => {
+                    const isBride = darkVeilBridePlayerIds?.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => handleToggleDarkVeilBride(p.id)}
+                        className={`px-2 py-1 rounded-lg text-xs font-medium border ${
+                          isBride
+                            ? 'bg-rose-700 text-white border-rose-500 shadow-sm'
+                            : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                        }`}
+                      >
+                        {p.name} ({getPlayerColor(p.colorId).name})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="p-2 rounded-lg bg-red-950/40 border border-red-800 text-xs text-red-200">
+              🌑 Real Dracula and Brides will register as Good! The fake Dracula and Brides will register as Evil. Renfield (you, the narrator) is the real Dracula — Good must declare to shoot Renfield in the Finale to win!
+            </div>
+          </div>
+        )}
+
+        {/* Blessing 10: Soul Swap Setup */}
+        {chosenBlessingId === 10 && (
+          <div className="mt-3 p-3 rounded-xl bg-purple-950/30 border border-purple-800 space-y-2.5">
+            <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Soul Swap Setup: Swap 1 Good player and 1 Bride
+            </span>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              Dracula chooses 1 Good player and 1 Bride. For Room questions, when one is selected, the other is selected instead, and their seating positions are swapped!
+            </p>
+
+            <div>
+              <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
+                Select Good Player:
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {goodPlayers.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSetSoulSwapGood(p.id)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium border ${
+                      soulSwapGoodPlayerId === p.id
+                        ? 'bg-blue-700 text-white border-blue-500 shadow-sm'
+                        : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {p.name} ({getPlayerColor(p.colorId).name})
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
+                Select Bride:
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {brides.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSetSoulSwapBride(p.id)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium border ${
+                      soulSwapBridePlayerId === p.id
+                        ? 'bg-rose-700 text-white border-rose-500 shadow-sm'
+                        : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {p.name} ({getPlayerColor(p.colorId).name})
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {soulSwapGoodPlayerId && soulSwapBridePlayerId && (
+              <div className="p-2 rounded-lg bg-purple-950/50 border border-purple-700 text-xs text-purple-200">
+                🔄 {players.find(p => p.id === soulSwapGoodPlayerId)?.name} and {players.find(p => p.id === soulSwapBridePlayerId)?.name} have had their souls swapped! In room questions and seating checks, they swap roles and positions.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Step 3: Dark Blessing NOT in Play */}
@@ -694,9 +1046,10 @@ export const NightTab: React.FC<NightTabProps> = ({
         </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-          {DARK_BLESSINGS.map(b => {
+          {activeBlessings.map((b, idx) => {
             const isExcluded = excludedBlessingId === b.id;
             const isChosen = chosenBlessingId === b.id;
+            const fingerCount = idx + 1;
             return (
               <button
                 key={b.id}
@@ -710,7 +1063,7 @@ export const NightTab: React.FC<NightTabProps> = ({
                     : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
                 }`}
               >
-                <span className="block text-xs font-mono font-bold">#{b.id}</span>
+                <span className="block text-xs font-mono font-bold">Slot #{fingerCount}</span>
                 <span className="text-[11px] block truncate">{b.name}</span>
               </button>
             );
@@ -761,9 +1114,21 @@ export const NightTab: React.FC<NightTabProps> = ({
                     </span>
                   </div>
 
+                  {hunter.id === wingedHunterId && (
+                    <div className="bg-rose-950/70 border border-rose-600 rounded-lg p-2 text-xs text-rose-200 space-y-0.5">
+                      <span className="font-bold flex items-center gap-1 text-rose-300 text-[11px] uppercase tracking-wider">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                        Winged Spies Active! Give False Information:
+                      </span>
+                      <p className="text-[11px] text-zinc-200 leading-snug">
+                        Dracula targeted this Hunter. Give them convincing FALSE information instead of the truth below!
+                      </p>
+                    </div>
+                  )}
+
                   <div className="bg-zinc-950/80 rounded-lg p-2 border border-blue-950 text-xs">
                     <span className="text-[10px] uppercase font-bold text-blue-400 tracking-wider block mb-0.5">
-                      Secret Info to Give:
+                      {hunter.id === wingedHunterId ? 'True Info (Lie Instead!):' : 'Secret Info to Give:'}
                     </span>
                     <p className="text-zinc-200 font-medium">
                       {getHunterSecretInfo(hunter.hunterType)}
