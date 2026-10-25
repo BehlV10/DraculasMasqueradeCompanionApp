@@ -240,11 +240,11 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   });
 
   const isShadowForcedFail = gameState.shadowRoomNumber === currentRoomNumber;
-  const isSewardForcedPass = gameState.sewardRoomNumber === currentRoomNumber;
+  const isMorrisForcedPass = (gameState.morrisRoomNumber ?? gameState.sewardRoomNumber) === currentRoomNumber;
   const isEchoingCurseFail = gameState.echoingCurseActive;
 
   let finalOutcome: 'pass' | 'fail' = 'pass';
-  if (isSewardForcedPass) {
+  if (isMorrisForcedPass) {
     finalOutcome = 'pass';
   } else if (isShadowForcedFail || isEchoingCurseFail) {
     finalOutcome = 'fail';
@@ -357,7 +357,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
       timestamp: Date.now(),
       echoingCurseTriggered: isEchoingCurseFail,
       gatheringShadowsTriggered: isShadowForcedFail,
-      sewardPassedTriggered: isSewardForcedPass,
+      morrisPassedTriggered: isMorrisForcedPass,
+      sewardPassedTriggered: isMorrisForcedPass,
     };
 
     setGameState(prev => ({
@@ -522,8 +523,10 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
           )}
         </div>
 
-        {/* Special Room Overrides (Blessing #5 Gathering Shadows & Hunter Dr. Seward) */}
-        {(gameState.chosenBlessingId === 5 || gameState.settings.selectedHunters.includes('dr_john_seward')) && (
+        {/* Special Room Overrides (Blessing #5 Gathering Shadows & Hunter Quincey Morris) */}
+        {(gameState.chosenBlessingId === 5 ||
+          gameState.settings.selectedHunters.includes('quincey_morris') ||
+          gameState.settings.selectedHunters.includes('dr_john_seward')) && (
           <div className="bg-[#121320] rounded-xl p-3 border border-purple-900/50 mb-3 space-y-2.5">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-400" />
@@ -565,24 +568,27 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 </div>
               )}
 
-              {/* Dr. John Seward */}
-              {gameState.settings.selectedHunters.includes('dr_john_seward') && (
+              {/* Quincey Morris */}
+              {(gameState.settings.selectedHunters.includes('quincey_morris') ||
+                gameState.settings.selectedHunters.includes('dr_john_seward')) && (
                 <div className="p-2.5 rounded-xl bg-blue-950/30 border border-blue-900/60 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-blue-300 flex items-center gap-1">
-                      <span>💉 Dr. Seward's Tonic (Hunter):</span>
+                      <span>🗡️ Quincey Morris Room Pass (Hunter):</span>
                     </span>
                     <span className="text-[10px] text-zinc-400 font-mono">
-                      {gameState.sewardRoomNumber ? `Auto-Passes Room #${gameState.sewardRoomNumber}` : 'Not designated'}
+                      {(gameState.morrisRoomNumber ?? gameState.sewardRoomNumber)
+                        ? `Auto-Passes Room #${gameState.morrisRoomNumber ?? gameState.sewardRoomNumber}`
+                        : 'Not designated'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <label className="text-[10px] uppercase font-bold text-zinc-400">Target Room:</label>
                     <select
-                      value={gameState.sewardRoomNumber || ''}
+                      value={(gameState.morrisRoomNumber ?? gameState.sewardRoomNumber) || ''}
                       onChange={e => {
                         const val = e.target.value ? Number(e.target.value) : null;
-                        setGameState(prev => ({ ...prev, sewardRoomNumber: val }));
+                        setGameState(prev => ({ ...prev, morrisRoomNumber: val, sewardRoomNumber: val }));
                       }}
                       className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 flex-1 font-mono focus:border-blue-500"
                     >
@@ -1014,9 +1020,9 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                     🌀 Twisted Whispers Active: In this player's solo room, Pass gives false information and Fail gives true information!
                   </span>
                 )}
-                {isSewardForcedPass && (
+                {isMorrisForcedPass && (
                   <span className="text-[11px] text-emerald-300 block font-medium mt-0.5">
-                    💉 Dr. Seward's Tonic Triggered: Room #{currentRoomNumber} automatically Passes regardless of votes!
+                    🗡️ Quincey Morris Room Pass Triggered: Room #{currentRoomNumber} automatically Passes regardless of votes!
                   </span>
                 )}
                 {isShadowForcedFail && (

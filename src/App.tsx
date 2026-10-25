@@ -33,10 +33,11 @@ function createDefaultPlayers(count: number): Player[] {
       role = 'hunter';
       const hTypes: Player['hunterType'][] = [
         'van_helsing',
-        'jonathan_harker',
         'mina_harker',
-        'quincey_morris',
         'dr_john_seward',
+        'jonathan_harker',
+        'arthur_holmwood',
+        'quincey_morris',
       ];
       hunterType = hTypes[i - (1 + rule.brides)];
     } else {
@@ -59,7 +60,7 @@ function createDefaultPlayers(count: number): Player[] {
 
 const defaultSettings: GameSettings = {
   playerCount: 8,
-  selectedHunters: ['van_helsing', 'jonathan_harker'],
+  selectedHunters: ['van_helsing', 'mina_harker'],
   selectedBlessingIds: [1, 2, 3, 4, 5],
   explorationTimeMinutes: 20,
   finaleTimeMinutes: 6,
@@ -76,6 +77,7 @@ const defaultInitialState: GameState = {
   restlessSpirits: [],
   shadowRoomNumber: null,
   sewardRoomNumber: null,
+  morrisRoomNumber: null,
   echoingCurseActive: false,
   echoingCurseDraculaVotedFail: false,
   twistedPlayerId: null,
@@ -99,7 +101,17 @@ export function App() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return {
+          ...defaultInitialState,
+          ...parsed,
+          settings: {
+            ...defaultSettings,
+            ...(parsed.settings || {}),
+          },
+          morrisRoomNumber: parsed.morrisRoomNumber ?? parsed.sewardRoomNumber ?? null,
+          sewardRoomNumber: parsed.morrisRoomNumber ?? parsed.sewardRoomNumber ?? null,
+        };
       }
     } catch (e) {
       console.error('Failed to restore saved game', e);

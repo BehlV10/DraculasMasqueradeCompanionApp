@@ -10,10 +10,11 @@ export type RoleType = 'dracula' | 'bride' | 'hunter' | 'guest';
 
 export type HunterType = 
   | 'van_helsing' 
-  | 'jonathan_harker' 
   | 'mina_harker' 
-  | 'quincey_morris' 
-  | 'dr_john_seward';
+  | 'dr_john_seward' 
+  | 'jonathan_harker' 
+  | 'arthur_holmwood' 
+  | 'quincey_morris';
 
 export type DarkBlessingId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
@@ -77,6 +78,7 @@ export interface RoomLogEntry {
   echoingCurseTriggered?: boolean;
   gatheringShadowsTriggered?: boolean;
   sewardPassedTriggered?: boolean;
+  morrisPassedTriggered?: boolean;
 }
 
 export interface RestlessSpirit {
@@ -106,6 +108,7 @@ export interface GameState {
   restlessSpirits: RestlessSpirit[];
   shadowRoomNumber: number | null;
   sewardRoomNumber: number | null;
+  morrisRoomNumber?: number | null;
   echoingCurseActive: boolean; // next room fails if true
   echoingCurseDraculaVotedFail: boolean;
   // Set 2 Blessings State

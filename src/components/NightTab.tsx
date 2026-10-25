@@ -327,31 +327,92 @@ export const NightTab: React.FC<NightTabProps> = ({
           ? `Dracula chose #${blessing.id}: ${blessing.name} (${blessing.description})`
           : 'Wait for Dracula to choose a Dark Blessing first!';
       }
-      case 'jonathan_harker': {
+      case 'mina_harker': {
         // Find candidates: other hunters or Dracula
-        const candidates = players.filter(p => p.role === 'dracula' || (p.role === 'hunter' && p.hunterType !== 'jonathan_harker'));
+        const candidates = players.filter(p => p.role === 'dracula' || (p.role === 'hunter' && p.hunterType !== 'mina_harker'));
         if (candidates.length === 0) return 'Dracula';
         const candidate = candidates[0];
         const cColor = getPlayerColor(candidate.colorId);
-        return `Show Jonathan Harker: ${candidate.name} (${cColor.name}, Seat ${candidate.seat}). Say: "This player is either Dracula or a Hunter."`;
+        return `Show Mina Harker: ${candidate.name} (${cColor.name}, Seat ${candidate.seat}). Say: "This player is either Dracula or a Hunter."`;
       }
-      case 'mina_harker': {
+      case 'dr_john_seward': {
         const target = guests[0];
         if (!target) return 'No guest available.';
         const tColor = getPlayerColor(target.colorId);
-        return `Show Mina Harker: ${target.name} (${tColor.name}, Seat ${target.seat}). Say: "This player is a Guest."`;
+        return `Show Dr. John Seward: ${target.name} (${tColor.name}, Seat ${target.seat}). Say: "This player is a Guest."`;
       }
-      case 'quincey_morris': {
+      case 'jonathan_harker': {
         const target = brides[0];
         if (!target) return 'No bride available.';
         const tColor = getPlayerColor(target.colorId);
-        return `Show Quincey Morris: ${target.name} (${tColor.name}, Seat ${target.seat}). Say: "This player is a Bride."`;
+        return `Show Jonathan Harker: ${target.name} (${tColor.name}, Seat ${target.seat}). Say: "This player is a Bride."`;
       }
-      case 'dr_john_seward': {
-        return 'Whisper to Dr. Seward: "You may choose a room number at any time during the game. That room will Pass regardless of votes."';
+      case 'arthur_holmwood': {
+        const nonDracula = players.filter(p => p.role !== 'dracula' && p.hunterType !== 'arthur_holmwood');
+        if (nonDracula.length < 2) return 'Not enough non-Dracula players to show.';
+        const c1 = nonDracula[0];
+        const c2 = nonDracula[1];
+        const col1 = getPlayerColor(c1.colorId);
+        const col2 = getPlayerColor(c2.colorId);
+        return `Show Arthur Holmwood: ${c1.name} (${col1.name}, Seat ${c1.seat}) and ${c2.name} (${col2.name}, Seat ${c2.seat}). Say: "These 2 players are not Dracula."`;
+      }
+      case 'quincey_morris': {
+        return 'Whisper to Quincey Morris: "You may choose a room number at any time during the game. That room will Pass regardless of votes."';
       }
       default:
         return 'No secret information.';
+    }
+  };
+
+  const getHunterLieSuggestion = (hunterType?: HunterType) => {
+    switch (hunterType) {
+      case 'van_helsing': {
+        const poolBlessings = DARK_BLESSINGS.filter(b => activeBlessingIds.includes(b.id) && b.id !== chosenBlessingId);
+        const alt = poolBlessings[0] || DARK_BLESSINGS.find(b => b.id !== chosenBlessingId);
+        return alt ? `Whisper an incorrect Dark Blessing: #${alt.id}: ${alt.name}` : 'Whisper an incorrect Dark Blessing.';
+      }
+      case 'mina_harker': {
+        const guestsOrBrides = players.filter(p => p.role === 'guest' || p.role === 'bride');
+        const alt = guestsOrBrides[0];
+        if (alt) {
+          const col = getPlayerColor(alt.colorId);
+          return `Point to ${alt.name} (${col.name}, Seat ${alt.seat}, who is a ${alt.role}) and say: "This player is either Dracula or a Hunter."`;
+        }
+        return 'Point to a Guest or Bride and say they are Dracula or a Hunter.';
+      }
+      case 'dr_john_seward': {
+        const nonGuests = players.filter(p => p.role !== 'guest');
+        const alt = nonGuests[0];
+        if (alt) {
+          const col = getPlayerColor(alt.colorId);
+          return `Point to ${alt.name} (${col.name}, Seat ${alt.seat}, who is ${alt.role}) and say: "This player is a Guest."`;
+        }
+        return 'Point to Dracula, a Bride, or another Hunter and say they are a Guest.';
+      }
+      case 'jonathan_harker': {
+        const nonBrides = players.filter(p => p.role !== 'bride');
+        const alt = nonBrides[0];
+        if (alt) {
+          const col = getPlayerColor(alt.colorId);
+          return `Point to ${alt.name} (${col.name}, Seat ${alt.seat}, who is ${alt.role}) and say: "This player is a Bride."`;
+        }
+        return 'Point to Dracula, a Guest, or another Hunter and say they are a Bride.';
+      }
+      case 'arthur_holmwood': {
+        const drac = players.find(p => p.role === 'dracula');
+        const other = players.find(p => p.role !== 'dracula' && p.hunterType !== 'arthur_holmwood');
+        if (drac && other) {
+          const colD = getPlayerColor(drac.colorId);
+          const colO = getPlayerColor(other.colorId);
+          return `Include Dracula: Point to ${drac.name} (${colD.name}, Seat ${drac.seat}) & ${other.name} (${colO.name}, Seat ${other.seat}) and say: "These 2 players are not Dracula."`;
+        }
+        return 'Point to 2 players including Dracula and say they are not Dracula.';
+      }
+      case 'quincey_morris': {
+        return 'Quincey Morris has no secret info to falsify; they designate a forced room pass.';
+      }
+      default:
+        return 'Give convincing false information.';
     }
   };
 
@@ -1115,7 +1176,7 @@ export const NightTab: React.FC<NightTabProps> = ({
                   </div>
 
                   {hunter.id === wingedHunterId && (
-                    <div className="bg-rose-950/70 border border-rose-600 rounded-lg p-2 text-xs text-rose-200 space-y-0.5">
+                    <div className="bg-rose-950/70 border border-rose-600 rounded-lg p-2 text-xs text-rose-200 space-y-1">
                       <span className="font-bold flex items-center gap-1 text-rose-300 text-[11px] uppercase tracking-wider">
                         <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
                         Winged Spies Active! Give False Information:
@@ -1123,6 +1184,10 @@ export const NightTab: React.FC<NightTabProps> = ({
                       <p className="text-[11px] text-zinc-200 leading-snug">
                         Dracula targeted this Hunter. Give them convincing FALSE information instead of the truth below!
                       </p>
+                      <div className="mt-1 pt-1 border-t border-rose-800/60 text-[11px] text-amber-200">
+                        <span className="font-bold">Suggested False Info: </span>
+                        <span>{getHunterLieSuggestion(hunter.hunterType)}</span>
+                      </div>
                     </div>
                   )}
 

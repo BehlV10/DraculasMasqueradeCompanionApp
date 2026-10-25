@@ -164,25 +164,42 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ gameState, setGameState 
                       </div>
                     </div>
 
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border flex items-center gap-1 ${
-                        room.outcome === 'pass'
-                          ? 'bg-emerald-950 border-emerald-700 text-emerald-300'
-                          : 'bg-rose-950 border-rose-700 text-rose-300'
-                      }`}
-                    >
-                      {room.outcome === 'pass' ? (
-                        <>
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          <span>PASS</span>
-                        </>
-                      ) : (
-                        <>
-                          <AlertTriangle className="w-3.5 h-3.5" />
-                          <span>FAIL</span>
-                        </>
+                    <div className="flex items-center gap-1.5">
+                      {(room.morrisPassedTriggered || room.sewardPassedTriggered) && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-950 border border-blue-700 text-blue-300">
+                          Quincey Pass
+                        </span>
                       )}
-                    </span>
+                      {room.gatheringShadowsTriggered && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-950 border border-purple-700 text-purple-300">
+                          Shadow Fail
+                        </span>
+                      )}
+                      {room.echoingCurseTriggered && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-950 border border-amber-700 text-amber-300">
+                          Curse Fail
+                        </span>
+                      )}
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border flex items-center gap-1 ${
+                          room.outcome === 'pass'
+                            ? 'bg-emerald-950 border-emerald-700 text-emerald-300'
+                            : 'bg-rose-950 border-rose-700 text-rose-300'
+                        }`}
+                      >
+                        {room.outcome === 'pass' ? (
+                          <>
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            <span>PASS</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            <span>FAIL</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Leader & Participants with Secret Votes */}
