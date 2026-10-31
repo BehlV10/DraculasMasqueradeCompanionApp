@@ -418,9 +418,9 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi2_evil_between_cw',
     hearts: 2,
-    question: 'Going clockwise, are there any Evil players between the two players in this room?',
+    question: 'Going clockwise, how many Evil players are between these 2 players?',
     category: 'adjacency',
-    options: ['Yes', 'No'],
+    options: ['0', '1', '2', '3', '4', '5', '6+'],
   },
   {
     id: 'multi2_first_evil_cw',
@@ -488,9 +488,9 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi2_evil_between_ccw',
     hearts: 2,
-    question: 'Going counter clockwise, are there any Evil players between the two players in this room?',
+    question: 'Going counter clockwise, how many Evil players are between these 2 players?',
     category: 'adjacency',
-    options: ['Yes', 'No'],
+    options: ['0', '1', '2', '3', '4', '5', '6+'],
   },
   {
     id: 'multi2_dracula_room_before',

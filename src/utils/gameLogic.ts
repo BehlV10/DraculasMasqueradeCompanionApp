@@ -558,23 +558,26 @@ export function computeRoomAnswer(
       const m = entities.length;
       const idx1 = entities.findIndex(e => e.type === 'player' && e.player?.id === p1.id);
       const idx2 = entities.findIndex(e => e.type === 'player' && e.player?.id === p2.id);
-      let foundEvil = false;
-      if (idx1 !== -1 && idx2 !== -1) {
+      let count = 0;
+      if (idx1 !== -1 && idx2 !== -1 && idx1 !== idx2) {
         let curr = (idx1 + 1) % m;
         while (curr !== idx2) {
           if (entities[curr].alignment === 'evil') {
-            foundEvil = true;
-            break;
+            count++;
           }
           curr = (curr + 1) % m;
         }
       }
+      const trueAns = count >= 6 ? '6+' : String(count);
+      const lie = count === 0 ? '1' : count === 1 ? '0' : String(count - 1);
       return {
-        trueAnswer: foundEvil ? 'Yes' : 'No',
-        recommendedLie: foundEvil ? 'No' : 'Yes',
-        lieReasoning: foundEvil
-          ? 'Hides Evil in the gap (players or evil spirits).'
-          : 'Frames good players between them.',
+        trueAnswer: trueAns,
+        recommendedLie: lie,
+        lieReasoning: idx1 === idx2
+          ? 'Select a 2nd player to see the count between them.'
+          : count > 0
+          ? `True count is ${trueAns} going clockwise from ${p1.name} (★) to ${p2.name}. Lie of ${lie} underreports Evil to protect evil players.`
+          : `True count is 0 going clockwise from ${p1.name} (★) to ${p2.name}. Lie of ${lie} frames innocent good players between them.`,
       };
     }
 
@@ -585,23 +588,26 @@ export function computeRoomAnswer(
       const m = entities.length;
       const idx1 = entities.findIndex(e => e.type === 'player' && e.player?.id === p1.id);
       const idx2 = entities.findIndex(e => e.type === 'player' && e.player?.id === p2.id);
-      let foundEvil = false;
-      if (idx1 !== -1 && idx2 !== -1) {
+      let count = 0;
+      if (idx1 !== -1 && idx2 !== -1 && idx1 !== idx2) {
         let curr = (idx1 - 1 + m) % m;
         while (curr !== idx2) {
           if (entities[curr].alignment === 'evil') {
-            foundEvil = true;
-            break;
+            count++;
           }
           curr = (curr - 1 + m) % m;
         }
       }
+      const trueAns = count >= 6 ? '6+' : String(count);
+      const lie = count === 0 ? '1' : count === 1 ? '0' : String(count - 1);
       return {
-        trueAnswer: foundEvil ? 'Yes' : 'No',
-        recommendedLie: foundEvil ? 'No' : 'Yes',
-        lieReasoning: foundEvil
-          ? 'Hides Evil in the gap (players or evil spirits).'
-          : 'Frames good players between them.',
+        trueAnswer: trueAns,
+        recommendedLie: lie,
+        lieReasoning: idx1 === idx2
+          ? 'Select a 2nd player to see the count between them.'
+          : count > 0
+          ? `True count is ${trueAns} going counter-clockwise from ${p1.name} (★) to ${p2.name}. Lie of ${lie} underreports Evil to protect evil players.`
+          : `True count is 0 going counter-clockwise from ${p1.name} (★) to ${p2.name}. Lie of ${lie} frames innocent good players between them.`,
       };
     }
 
