@@ -227,6 +227,9 @@ export const ReferenceTab: React.FC = () => {
                         {cat?.emoji} {cat?.shortName || c.category}
                       </span>
                       <p className="text-zinc-200 font-medium">{c.question}</p>
+                      {c.notes && (
+                        <p className="text-[10px] text-amber-300/80 italic mt-0.5">ℹ️ {c.notes}</p>
+                      )}
                     </div>
                   );
                 })}

@@ -246,6 +246,7 @@ export interface RoomAnswerResult {
   trueAnswer: string;
   recommendedLie: string;
   lieReasoning: string;
+  explanation?: string;
 }
 
 export function computeRoomAnswer(
@@ -559,25 +560,39 @@ export function computeRoomAnswer(
       const idx1 = entities.findIndex(e => e.type === 'player' && e.player?.id === p1.id);
       const idx2 = entities.findIndex(e => e.type === 'player' && e.player?.id === p2.id);
       let count = 0;
+      const evilEntities: string[] = [];
       if (idx1 !== -1 && idx2 !== -1 && idx1 !== idx2) {
         let curr = (idx1 + 1) % m;
         while (curr !== idx2) {
           if (entities[curr].alignment === 'evil') {
             count++;
+            const name = entities[curr].type === 'player'
+              ? `${entities[curr].player?.name || 'Player'} (Seat ${entities[curr].seatNumber})`
+              : 'Evil Spirit';
+            evilEntities.push(name);
           }
           curr = (curr + 1) % m;
         }
       }
       const trueAns = count >= 6 ? '6+' : String(count);
       const lie = count === 0 ? '1' : count === 1 ? '0' : String(count - 1);
+      const p1Label = `${p1.name}${p1.id === leader.id ? ' (★ Leader)' : ''}`;
+      const p2Label = `${p2.name}${p2.id === leader.id ? ' (★ Leader)' : ''}`;
+      const explanation = idx1 === idx2
+        ? 'Select a 2nd explorer to calculate the count between them.'
+        : count === 0
+        ? `Counted clockwise from ${p1Label} to ${p2Label}: 0 Evil players found in between.`
+        : `Counted clockwise from ${p1Label} to ${p2Label}: ${count} Evil found (${evilEntities.join(', ')}).`;
+
       return {
         trueAnswer: trueAns,
         recommendedLie: lie,
+        explanation,
         lieReasoning: idx1 === idx2
           ? 'Select a 2nd player to see the count between them.'
           : count > 0
-          ? `True count is ${trueAns} going clockwise from ${p1.name} (★) to ${p2.name}. Lie of ${lie} underreports Evil to protect evil players.`
-          : `True count is 0 going clockwise from ${p1.name} (★) to ${p2.name}. Lie of ${lie} frames innocent good players between them.`,
+          ? `True count is ${trueAns} going clockwise from ${p1Label} to ${p2Label}. Lie of ${lie} underreports Evil to protect evil players.`
+          : `True count is 0 going clockwise from ${p1Label} to ${p2Label}. Lie of ${lie} frames innocent good players between them.`,
       };
     }
 
@@ -589,25 +604,39 @@ export function computeRoomAnswer(
       const idx1 = entities.findIndex(e => e.type === 'player' && e.player?.id === p1.id);
       const idx2 = entities.findIndex(e => e.type === 'player' && e.player?.id === p2.id);
       let count = 0;
+      const evilEntities: string[] = [];
       if (idx1 !== -1 && idx2 !== -1 && idx1 !== idx2) {
         let curr = (idx1 - 1 + m) % m;
         while (curr !== idx2) {
           if (entities[curr].alignment === 'evil') {
             count++;
+            const name = entities[curr].type === 'player'
+              ? `${entities[curr].player?.name || 'Player'} (Seat ${entities[curr].seatNumber})`
+              : 'Evil Spirit';
+            evilEntities.push(name);
           }
           curr = (curr - 1 + m) % m;
         }
       }
       const trueAns = count >= 6 ? '6+' : String(count);
       const lie = count === 0 ? '1' : count === 1 ? '0' : String(count - 1);
+      const p1Label = `${p1.name}${p1.id === leader.id ? ' (★ Leader)' : ''}`;
+      const p2Label = `${p2.name}${p2.id === leader.id ? ' (★ Leader)' : ''}`;
+      const explanation = idx1 === idx2
+        ? 'Select a 2nd explorer to calculate the count between them.'
+        : count === 0
+        ? `Counted counter-clockwise from ${p1Label} to ${p2Label}: 0 Evil players found in between.`
+        : `Counted counter-clockwise from ${p1Label} to ${p2Label}: ${count} Evil found (${evilEntities.join(', ')}).`;
+
       return {
         trueAnswer: trueAns,
         recommendedLie: lie,
+        explanation,
         lieReasoning: idx1 === idx2
           ? 'Select a 2nd player to see the count between them.'
           : count > 0
-          ? `True count is ${trueAns} going counter-clockwise from ${p1.name} (★) to ${p2.name}. Lie of ${lie} underreports Evil to protect evil players.`
-          : `True count is 0 going counter-clockwise from ${p1.name} (★) to ${p2.name}. Lie of ${lie} frames innocent good players between them.`,
+          ? `True count is ${trueAns} going counter-clockwise from ${p1Label} to ${p2Label}. Lie of ${lie} underreports Evil to protect evil players.`
+          : `True count is 0 going counter-clockwise from ${p1Label} to ${p2Label}. Lie of ${lie} frames innocent good players between them.`,
       };
     }
 
@@ -1203,7 +1232,9 @@ export function resolveQuestionText(
   template: string,
   targetA?: Player,
   targetB?: Player,
-  numericParam?: number
+  numericParam?: number,
+  fromPlayer?: Player,
+  toPlayer?: Player
 ): string {
   let resolved = template;
 
@@ -1214,6 +1245,16 @@ export function resolveQuestionText(
     4: '4th',
     5: '5th',
   };
+
+  if (fromPlayer && toPlayer && fromPlayer.id !== toPlayer.id) {
+    const colFrom = getPlayerColor(fromPlayer.colorId);
+    const colTo = getPlayerColor(toPlayer.colorId);
+    if (resolved.includes('Going clockwise, how many Evil players are between these 2 players?')) {
+      resolved = `Going clockwise (from ${fromPlayer.name} [Seat ${fromPlayer.seat}, ${colFrom.name}] to ${toPlayer.name} [Seat ${toPlayer.seat}, ${colTo.name}]), how many Evil players are between these 2 players?`;
+    } else if (resolved.includes('Going counter clockwise, how many Evil players are between these 2 players?')) {
+      resolved = `Going counter-clockwise (from ${fromPlayer.name} [Seat ${fromPlayer.seat}, ${colFrom.name}] to ${toPlayer.name} [Seat ${toPlayer.seat}, ${colTo.name}]), how many Evil players are between these 2 players?`;
+    }
+  }
 
   if (targetA) {
     const color = getPlayerColor(targetA.colorId);

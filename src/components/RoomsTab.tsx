@@ -62,6 +62,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   const [targetPlayerBId, setTargetPlayerBId] = useState<string>('');
   const [numericParam, setNumericParam] = useState<number>(1);
   const [answerGiven, setAnswerGiven] = useState<string>('');
+  const [isReversedBetween, setIsReversedBetween] = useState<boolean>(false);
   
   // Table view toggle state
   const [showSeatingTable, setShowSeatingTable] = useState<boolean>(false);
@@ -145,6 +146,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
         : newHeartsCards[0];
       if (validFirst) setSelectedQuestionId(validFirst.id);
     }
+    setIsReversedBetween(false);
   };
 
   // When a question is selected from the picker
@@ -155,6 +157,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
     }
     setSelectedCategory(card.category);
     setIsCardPickerOpen(false);
+    setIsReversedBetween(false);
   };
 
   // Cycle to previous / next card in the active category pool
@@ -169,10 +172,12 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
     if (nextIndex >= pool.length) nextIndex = 0;
     if (nextIndex < 0) nextIndex = pool.length - 1;
     setSelectedQuestionId(pool[nextIndex].id);
+    setIsReversedBetween(false);
   };
 
   const handleLeaderChange = (newLeaderId: string) => {
     setLeaderId(newLeaderId);
+    setIsReversedBetween(false);
     if (hearts === 1) {
       setParticipantIds([newLeaderId]);
       return;
@@ -265,12 +270,26 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   const targetPlayerB = players.find(p => p.id === targetPlayerBId);
   const draculaPlayer = players.find(p => p.role === 'dracula');
 
+  const isBetweenQuestion =
+    selectedQuestion.id === 'multi2_evil_between_cw' ||
+    selectedQuestion.id === 'multi2_evil_between_ccw';
+
+  const secondExplorer = participantPlayers.find(p => p.id !== leaderId);
+  const fromPlayer = (isBetweenQuestion && isReversedBetween && secondExplorer) ? secondExplorer : leaderPlayer;
+  const toPlayer = (isBetweenQuestion && isReversedBetween && secondExplorer) ? leaderPlayer : secondExplorer;
+  const fromColor = getPlayerColor(fromPlayer.colorId);
+  const toColor = toPlayer ? getPlayerColor(toPlayer.colorId) : undefined;
+
+  const effectiveParticipants = isBetweenQuestion
+    ? (toPlayer && toPlayer.id !== fromPlayer.id ? [fromPlayer, toPlayer] : [fromPlayer])
+    : participantPlayers;
+
   const answerAnalysis = selectedQuestionId
     ? computeRoomAnswer(
         selectedQuestionId,
         gameState,
         leaderPlayer,
-        participantPlayers,
+        effectiveParticipants,
         targetPlayerA,
         targetPlayerB,
         numericParam
@@ -345,7 +364,9 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
         selectedQuestion?.question || customQuestionText || 'Custom Room Question',
         targetPlayerA,
         targetPlayerB,
-        numericParam
+        numericParam,
+        isBetweenQuestion ? fromPlayer : undefined,
+        isBetweenQuestion ? toPlayer : undefined
       ),
       calculatedTrueAnswer: answerAnalysis?.trueAnswer,
       suggestedLie: answerAnalysis?.recommendedLie,
@@ -378,6 +399,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
     setVotes({});
     setAnswerGiven('');
+    setIsReversedBetween(false);
   };
 
   const renderCardItem = (card: RoomCardDefinition) => {
@@ -426,6 +448,12 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
         <p className="text-xs sm:text-sm font-semibold text-zinc-100 leading-snug">
           {card.question}
         </p>
+
+        {card.notes && (
+          <p className="text-[10px] text-amber-300/90 italic mt-1 leading-snug">
+            ℹ️ {card.notes}
+          </p>
+        )}
 
         {card.options && (
           <div className="flex flex-wrap gap-1 mt-2 text-[10px] text-zinc-400">
@@ -690,8 +718,100 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
             {/* Question Text */}
             <p className="font-serif text-sm sm:text-base font-bold text-rose-50 leading-snug my-2">
-              "{selectedQuestion.question}"
+              "{isBetweenQuestion && toPlayer && toPlayer.id !== fromPlayer.id ? (
+                <>
+                  Going {selectedQuestion.id === 'multi2_evil_between_cw' ? 'clockwise' : 'counter clockwise'}{' '}
+                  <span className="text-amber-300 font-sans font-semibold text-xs px-2 py-0.5 rounded-lg bg-amber-950/80 border border-amber-600/70 inline-flex items-center gap-1 mx-0.5">
+                    <span>from</span>
+                    <strong className="underline">{fromPlayer.name} {fromPlayer.id === leaderId ? '(★)' : ''}</strong>
+                    <span>➔</span>
+                    <strong className="underline">{toPlayer.name} {toPlayer.id === leaderId ? '(★)' : ''}</strong>
+                  </span>
+                  , how many Evil players are between these 2 players?
+                </>
+              ) : (
+                selectedQuestion.question
+              )}"
             </p>
+
+            {/* Direction & Origin indicator for Clockwise / Counter-Clockwise between questions */}
+            {isBetweenQuestion && (
+              <div className="my-2.5 p-2.5 rounded-xl bg-purple-950/40 border border-purple-800/70 text-xs">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-purple-200">
+                    <Compass className="w-3.5 h-3.5 text-purple-400" />
+                    <span>
+                      Count Direction ({selectedQuestion.id === 'multi2_evil_between_cw' ? 'Clockwise ↻' : 'Counter-Clockwise ↺'}):
+                    </span>
+                  </div>
+                  {secondExplorer && (
+                    <button
+                      type="button"
+                      onClick={() => setIsReversedBetween(prev => !prev)}
+                      className="px-2 py-0.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] font-mono font-bold flex items-center gap-1 border border-zinc-700 transition-colors shadow-sm cursor-pointer"
+                      title="Swap starting player and destination player"
+                    >
+                      <span>⇄ Swap Direction</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  {/* From Player */}
+                  <div className="flex items-center gap-1.5 bg-amber-950/70 border border-amber-600/80 px-2.5 py-1 rounded-lg">
+                    <span className="text-[10px] uppercase font-bold text-amber-400">Starting From:</span>
+                    <span
+                      style={{ backgroundColor: fromColor?.hex, color: fromColor?.textColor }}
+                      className="w-4 h-4 rounded font-mono text-[9px] font-bold flex items-center justify-center"
+                    >
+                      {fromPlayer.seat}
+                    </span>
+                    <span className="font-bold text-amber-200">
+                      {fromPlayer.name} {fromPlayer.id === leaderId ? '★ (Leader)' : ''}
+                    </span>
+                  </div>
+
+                  {/* Arrow */}
+                  <span className="text-purple-300 font-bold flex items-center gap-1 text-[11px]">
+                    <span>➔</span>
+                    <span className="uppercase text-[9px] font-mono tracking-wider font-extrabold bg-purple-900/60 px-1.5 py-0.5 rounded border border-purple-700">
+                      {selectedQuestion.id === 'multi2_evil_between_cw' ? 'Clockwise' : 'Counter-Clockwise'}
+                    </span>
+                    <span>➔</span>
+                  </span>
+
+                  {/* To Player */}
+                  <div className="flex items-center gap-1.5 bg-blue-950/70 border border-blue-600/80 px-2.5 py-1 rounded-lg">
+                    <span className="text-[10px] uppercase font-bold text-blue-400">Ending At:</span>
+                    {toPlayer && toPlayer.id !== fromPlayer.id ? (
+                      <>
+                        <span
+                          style={{ backgroundColor: toColor?.hex, color: toColor?.textColor }}
+                          className="w-4 h-4 rounded font-mono text-[9px] font-bold flex items-center justify-center"
+                        >
+                          {toPlayer.seat}
+                        </span>
+                        <span className="font-bold text-blue-200">
+                          {toPlayer.name} {toPlayer.id === leaderId ? '★ (Leader)' : ''}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-zinc-400 italic text-[11px]">Choose 2nd player below</span>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-zinc-400 mt-1.5 italic">
+                  *The Star Heart on the card represents the Room Leader. Count proceeds {selectedQuestion.id === 'multi2_evil_between_cw' ? 'clockwise' : 'counter-clockwise'} from the designated Starting player to the Ending player.
+                </p>
+              </div>
+            )}
+
+            {selectedQuestion.notes && !isBetweenQuestion && (
+              <p className="text-[11px] text-amber-300/80 italic mt-1 leading-snug">
+                ℹ️ {selectedQuestion.notes}
+              </p>
+            )}
 
             {/* Direct Question Dropdown for selected Category */}
             <div className="mt-2 pt-2 border-t border-zinc-800/60">
@@ -1107,7 +1227,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
               </div>
             )}
 
-            <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-900/50 flex items-center justify-between text-xs">
+            <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
               <div>
                 <span className="text-[10px] uppercase font-bold text-emerald-400 block">
                   True Answer:
@@ -1115,10 +1235,15 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 <span className="font-bold text-emerald-200 text-sm">
                   {answerAnalysis.trueAnswer}
                 </span>
+                {answerAnalysis.explanation && (
+                  <p className="text-[11px] text-emerald-300/90 mt-0.5 leading-snug">
+                    {answerAnalysis.explanation}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setAnswerGiven(answerAnalysis.trueAnswer)}
-                className="px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-sm"
+                className="px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-sm self-start sm:self-auto shrink-0"
               >
                 Use True Answer
               </button>
