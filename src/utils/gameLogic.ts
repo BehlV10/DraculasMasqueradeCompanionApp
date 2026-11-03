@@ -1247,12 +1247,10 @@ export function resolveQuestionText(
   };
 
   if (fromPlayer && toPlayer && fromPlayer.id !== toPlayer.id) {
-    const colFrom = getPlayerColor(fromPlayer.colorId);
-    const colTo = getPlayerColor(toPlayer.colorId);
-    if (resolved.includes('Going clockwise, how many Evil players are between these 2 players?')) {
-      resolved = `Going clockwise (from ${fromPlayer.name} [Seat ${fromPlayer.seat}, ${colFrom.name}] to ${toPlayer.name} [Seat ${toPlayer.seat}, ${colTo.name}]), how many Evil players are between these 2 players?`;
-    } else if (resolved.includes('Going counter clockwise, how many Evil players are between these 2 players?')) {
-      resolved = `Going counter-clockwise (from ${fromPlayer.name} [Seat ${fromPlayer.seat}, ${colFrom.name}] to ${toPlayer.name} [Seat ${toPlayer.seat}, ${colTo.name}]), how many Evil players are between these 2 players?`;
+    if (resolved.includes('Going clockwise starting with the room leader*')) {
+      resolved = `Going clockwise starting with the room leader* (${fromPlayer.name} to ${toPlayer.name}), how many Evil players are between these 2 players?`;
+    } else if (resolved.includes('Going counter clockwise starting with the room leader*')) {
+      resolved = `Going counter-clockwise starting with the room leader* (${fromPlayer.name} to ${toPlayer.name}), how many Evil players are between these 2 players?`;
     }
   }
 
