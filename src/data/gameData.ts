@@ -57,7 +57,7 @@ export const GUEST_LIST_RULES: Record<number, RosterRule> = {
   5:  { players: 5,  dracula: 1, brides: 1, hunters: 0, guests: 3, explorationTime: 20, finaleTime: 6 },
   6:  { players: 6,  dracula: 1, brides: 1, hunters: 2, guests: 2, explorationTime: 20, finaleTime: 6 },
   7:  { players: 7,  dracula: 1, brides: 1, hunters: 2, guests: 3, explorationTime: 20, finaleTime: 6 },
-  8:  { players: 8,  dracula: 1, brides: 1, hunters: 2, guests: 4, explorationTime: 20, finaleTime: 6 },
+  8:  { players: 8,  dracula: 1, brides: 1, hunters: 2, guests: 4, explorationTime: 20, finaleTime: 8 },
   9:  { players: 9,  dracula: 1, brides: 2, hunters: 3, guests: 3, explorationTime: 25, finaleTime: 8 },
   10: { players: 10, dracula: 1, brides: 2, hunters: 3, guests: 4, explorationTime: 25, finaleTime: 8 },
   11: { players: 11, dracula: 1, brides: 2, hunters: 3, guests: 5, explorationTime: 25, finaleTime: 8 },
@@ -374,7 +374,7 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'solo_blessing_in_play',
     hearts: 1,
-    question: 'Is the [1st/2nd/3rd/4th/5th] Dark Blessing in play?',
+    question: 'Is the [1st/2nd/3rd/4th] Dark Blessing in play?',
     category: 'blessing',
     options: ['Yes', 'No'],
   },
@@ -404,7 +404,7 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi2_evil_pairs',
     hearts: 2,
-    question: 'How many Evil pairs are there? (Adjacent Evil players)',
+    question: 'How many Evil pairs are there?',
     category: 'counts',
     options: ['0', '1', '2', '3', '4', '5', '6+'],
   },
@@ -418,7 +418,7 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi2_evil_between_cw',
     hearts: 2,
-    question: 'Going clockwise starting with the room leader*, how many Evil players are between these 2 players?',
+    question: 'Going clockwise from the Room Leader, how many Evil players are between us?',
     category: 'adjacency',
     options: ['0', '1', '2', '3', '4', '5', '6+'],
   },
@@ -447,13 +447,6 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
     id: 'multi2_sitting_next_to_dracula',
     hearts: 2,
     question: 'Am I sitting next to Dracula?',
-    category: 'adjacency',
-    options: ['Yes', 'No'],
-  },
-  {
-    id: 'multi2_any_next_to_two_evil',
-    hearts: 2,
-    question: 'Are any players sitting next to 2 evil players?',
     category: 'adjacency',
     options: ['Yes', 'No'],
   },
@@ -488,7 +481,7 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi2_evil_between_ccw',
     hearts: 2,
-    question: 'Going counter clockwise starting with the room leader*, how many Evil players are between these 2 players?',
+    question: 'Going counter clockwise from the Room Leader, how many Evil players are between us?',
     category: 'adjacency',
     options: ['0', '1', '2', '3', '4', '5', '6+'],
   },
@@ -535,13 +528,6 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
     options: ['Yes', 'No'],
   },
   {
-    id: 'multi2_blessing_x_or_y',
-    hearts: 2,
-    question: 'Is the [X] or [Y] Dark Blessing in play?',
-    category: 'blessing',
-    options: ['Yes', 'No'],
-  },
-  {
     id: 'multi2_dracula_leader_prior',
     hearts: 2,
     question: 'Has Dracula been a room leader in any prior room?',
@@ -557,6 +543,20 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   },
 
   // 3-Heart Rooms (Multiplayer)
+  {
+    id: 'multi3_next_failed_vote_pass',
+    hearts: 3,
+    question: 'If this room passes the next failed vote will turn to pass.',
+    category: 'blessing',
+    options: ['Yes', 'No'],
+  },
+  {
+    id: 'multi3_what_blessing_in_play',
+    hearts: 3,
+    question: 'What Dark Blessing is in play?',
+    category: 'blessing',
+    options: ['1st', '2nd', '3rd', '4th'],
+  },
   {
     id: 'multi3_dracula_hearts_used',
     hearts: 3,
@@ -581,7 +581,7 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi3_who_failed_last',
     hearts: 3,
-    question: 'Who failed the last room before this one?',
+    question: 'Who was the last player to fail a room before this room?',
     category: 'history',
     options: ['No One', 'Player Name'],
   },
@@ -602,7 +602,7 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi3_are_these_all_good',
     hearts: 3,
-    question: 'List as many players as you like, are they all Good? ([Player])',
+    question: 'List as many players as you like, are they all Good?',
     category: 'identity',
     options: ['Yes', 'No'],
   },
@@ -616,14 +616,14 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi3_is_leader_good_special',
     hearts: 3,
-    question: "Is the Room Leader good? (No answer given if room fails or if they're bad)",
+    question: "Is the Room Leader good? No answer will be given if this room fails or if they're bad.",
     category: 'identity',
     options: ['They are good', 'No Answer'],
   },
   {
     id: 'multi3_is_dracula_among_them',
     hearts: 3,
-    question: 'List as many players as you like, is Dracula among them? ([Player])',
+    question: 'List as many players as you like, is Dracula among them?',
     category: 'identity',
     options: ['Yes', 'No'],
   },
@@ -637,14 +637,14 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi3_are_these_all_evil',
     hearts: 3,
-    question: 'List as many players as you like, are they all Evil? ([Player])',
+    question: 'List as many players as you like, are they all Evil?',
     category: 'identity',
     options: ['Yes', 'No'],
   },
   {
     id: 'multi3_player_room_number_fail',
     hearts: 3,
-    question: "Did [Player]'s [1st / 2nd / 3rd] room fail?",
+    question: "Did [Player]'s [1st/2nd/3rd] room fail?",
     category: 'history',
     options: ['Yes', 'No'],
   },
@@ -665,14 +665,14 @@ export const ROOM_CARDS: RoomCardDefinition[] = [
   {
     id: 'multi3_players_all_voted_pass_prior',
     hearts: 3,
-    question: 'List players, have they voted pass in all their rooms prior? ([Player])',
+    question: 'List players, have they voted pass in all their rooms prior?',
     category: 'history',
     options: ['Yes', 'No'],
   },
   {
     id: 'multi3_players_all_in_failed_room_prior',
     hearts: 3,
-    question: 'List players, have they all been in a failed room prior? ([Player])',
+    question: 'List players, have they all been in a failed room prior?',
     category: 'history',
     options: ['Yes', 'No'],
   },

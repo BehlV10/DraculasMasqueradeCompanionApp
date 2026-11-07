@@ -224,19 +224,27 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   // Calculate actual outcome with dark blessings & powers
   const rawVotes: Record<string, 'pass' | 'fail'> = {};
   const processedVotes: Record<string, 'pass' | 'fail'> = {};
+  let turnedVotePlayerId: string | null = null;
 
   participantIds.forEach(pId => {
     const raw = votes[pId] || 'pass';
     rawVotes[pId] = raw;
 
     const player = players.find(p => p.id === pId);
+    let v: 'pass' | 'fail' = raw;
     if (player?.isPuppet) {
-      processedVotes[pId] = 'fail';
+      v = 'fail';
     } else if (player?.role === 'dracula' && raw === 'fail' && gameState.chosenBlessingId === 4) {
-      processedVotes[pId] = 'pass';
-    } else {
-      processedVotes[pId] = raw;
+      v = 'pass';
     }
+
+    // Turn next failed vote to pass if protection active from multi3_next_failed_vote_pass
+    if (v === 'fail' && gameState.nextFailedVoteTurnsToPass && !turnedVotePlayerId) {
+      v = 'pass';
+      turnedVotePlayerId = pId;
+    }
+
+    processedVotes[pId] = v;
   });
 
   const isShadowForcedFail = gameState.shadowRoomNumber === currentRoomNumber;
@@ -369,12 +377,21 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
       gatheringShadowsTriggered: isShadowForcedFail,
       morrisPassedTriggered: isMorrisForcedPass,
       sewardPassedTriggered: isMorrisForcedPass,
+      nextFailedVoteTurnedToPass: Boolean(turnedVotePlayerId),
     };
+
+    const isNextFailedVotePassCard = selectedQuestionId === 'multi3_next_failed_vote_pass';
+    const activatesProtection = isNextFailedVotePassCard && finalOutcome === 'pass';
 
     setGameState(prev => ({
       ...prev,
       roomsHistory: [...prev.roomsHistory, logEntry],
       echoingCurseActive: draculaFailedHere ? true : false,
+      nextFailedVoteTurnsToPass: activatesProtection
+        ? true
+        : turnedVotePlayerId
+        ? false
+        : prev.nextFailedVoteTurnsToPass,
       players: prev.players.map(p => {
         if (participantIds.includes(p.id)) {
           return {
@@ -539,19 +556,36 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
           )}
         </div>
 
-        {/* Special Room Overrides (Blessing #5 Gathering Shadows & Hunter Quincey Morris) */}
+        {/* Special Room Overrides (Blessing #5 Gathering Shadows, Hunter Quincey Morris & Failed Vote Protection) */}
         {(gameState.chosenBlessingId === 5 ||
           gameState.settings.selectedHunters.includes('quincey_morris') ||
-          gameState.settings.selectedHunters.includes('dr_john_seward')) && (
+          gameState.settings.selectedHunters.includes('dr_john_seward') ||
+          gameState.nextFailedVoteTurnsToPass) && (
           <div className="bg-[#121320] rounded-xl p-3 border border-purple-900/50 mb-3 space-y-2.5">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-400" />
               <span className="text-xs font-serif font-bold text-purple-200">
-                Special Room Overrides (Dark Blessing & Hunter Powers)
+                Special Room Overrides (Dark Blessing, Hunter Powers & Card Effects)
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              {/* Failed Vote Protection (3-Heart Room Card) */}
+              {gameState.nextFailedVoteTurnsToPass && (
+                <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-600/70 space-y-1 sm:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+                      <span>🛡️ Failed Vote Protection Active:</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-mono font-bold">
+                      Pending Next Fail
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-200/90 leading-snug">
+                    A previous 3-player room passed: the next player who casts a Fail vote will have their vote secretly converted to Pass!
+                  </p>
+                </div>
+              )}
               {/* Gathering Shadows */}
               {gameState.chosenBlessingId === 5 && (
                 <div className="p-2.5 rounded-xl bg-red-950/30 border border-red-900/60 space-y-1.5">
@@ -805,15 +839,26 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
             </div>
           )}
 
-          {(selectedQuestion.question.includes('[1st') || selectedQuestion.question.includes('___ seats') || selectedQuestion.question.includes('[X] or [Y]')) && (
+          {(selectedQuestion.question.includes('[1st') || selectedQuestion.question.includes('___ seats')) && (
             <div className="mt-2.5 p-2.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
               <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
                 {selectedQuestion.id === 'multi3_player_room_number_fail'
                   ? "Which Room of Target Player?"
-                  : "Parameter (Blessing Slot / Seat Distance):"}
+                  : selectedQuestion.id === 'solo_blessing_in_play'
+                  ? "Which Dark Blessing Slot?"
+                  : selectedQuestion.id === 'multi3_dracula_within_x'
+                  ? "Distance in Seats (0 = Room Leader):"
+                  : "Parameter:"}
               </label>
               <div className="flex flex-wrap gap-1.5">
-                {(selectedQuestion.id === 'multi3_player_room_number_fail' ? [1, 2, 3] : [1, 2, 3, 4, 5]).map(num => (
+                {(selectedQuestion.id === 'multi3_player_room_number_fail'
+                  ? [1, 2, 3]
+                  : selectedQuestion.id === 'solo_blessing_in_play'
+                  ? [1, 2, 3, 4]
+                  : selectedQuestion.id === 'multi3_dracula_within_x'
+                  ? [0, 1, 2, 3, 4, 5, 6, 7, 8]
+                  : [1, 2, 3, 4]
+                ).map(num => (
                   <button
                     key={num}
                     onClick={() => setNumericParam(num)}
@@ -825,6 +870,10 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                   >
                     {selectedQuestion.id === 'multi3_player_room_number_fail'
                       ? `${num === 1 ? '1st' : num === 2 ? '2nd' : '3rd'} Room`
+                      : selectedQuestion.id === 'solo_blessing_in_play'
+                      ? `${num === 1 ? '1st' : num === 2 ? '2nd' : num === 3 ? '3rd' : '4th'} Blessing`
+                      : selectedQuestion.id === 'multi3_dracula_within_x'
+                      ? `${num} ${num === 1 ? 'Seat' : 'Seats'}`
                       : `#${num}`}
                   </button>
                 ))}
@@ -980,6 +1029,11 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                       {p.role === 'dracula' && gameState.chosenBlessingId === 4 && vote === 'fail' && (
                         <span className="ml-1 text-[9px] bg-amber-950 text-amber-300 px-1 py-0.2 rounded border border-amber-800 animate-pulse">
                           ⚡ Echoing Curse (Treated as Pass)
+                        </span>
+                      )}
+                      {turnedVotePlayerId === p.id && (
+                        <span className="ml-1 text-[9px] bg-emerald-950 text-emerald-300 px-1 py-0.2 rounded border border-emerald-700 animate-pulse">
+                          🛡️ Protection (Converted Fail ➔ Pass!)
                         </span>
                       )}
                     </div>

@@ -180,6 +180,11 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ gameState, setGameState 
                           Curse Fail
                         </span>
                       )}
+                      {room.nextFailedVoteTurnedToPass && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-950 border border-emerald-700 text-emerald-300">
+                          🛡️ Vote Protected
+                        </span>
+                      )}
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border flex items-center gap-1 ${
                           room.outcome === 'pass'

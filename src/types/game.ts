@@ -79,6 +79,7 @@ export interface RoomLogEntry {
   gatheringShadowsTriggered?: boolean;
   sewardPassedTriggered?: boolean;
   morrisPassedTriggered?: boolean;
+  nextFailedVoteTurnedToPass?: boolean;
 }
 
 export interface RestlessSpirit {
@@ -111,6 +112,7 @@ export interface GameState {
   morrisRoomNumber?: number | null;
   echoingCurseActive: boolean; // next room fails if true
   echoingCurseDraculaVotedFail: boolean;
+  nextFailedVoteTurnsToPass?: boolean; // 3-heart room card power
   // Set 2 Blessings State
   twistedPlayerId?: string | null; // Blessing 6: Twisted Whispers
   wingedHunterId?: string | null; // Blessing 7: Winged Spies

@@ -1,5 +1,5 @@
 import { GameState, Player, RoleType, RoomLogEntry } from '../types/game';
-import { OFFICIAL_COLORS } from '../data/gameData';
+import { DARK_BLESSINGS, OFFICIAL_COLORS } from '../data/gameData';
 
 export function isEvilRole(role: RoleType): boolean {
   return role === 'dracula' || role === 'bride';
@@ -698,31 +698,6 @@ export function computeRoomAnswer(
       };
     }
 
-    case 'multi2_any_next_to_two_evil': {
-      const entities = getSeatedEntities(gameState);
-      const m = entities.length;
-      let found = false;
-      if (m >= 3) {
-        for (let i = 0; i < m; i++) {
-          if (entities[i].type === 'player') {
-            const left = entities[(i - 1 + m) % m];
-            const right = entities[(i + 1) % m];
-            if (left.alignment === 'evil' && right.alignment === 'evil') {
-              found = true;
-              break;
-            }
-          }
-        }
-      }
-      return {
-        trueAnswer: found ? 'Yes' : 'No',
-        recommendedLie: found ? 'No' : 'Yes',
-        lieReasoning: found
-          ? 'Conceals that a player is bracketed by 2 Evil entities.'
-          : 'Creates false suspicion of sandwiching.',
-      };
-    }
-
     case 'multi2_sitting_next_to_dracula': {
       if (!dracula) return { trueAnswer: 'No', recommendedLie: 'Yes', lieReasoning: '' };
       const entities = getSeatedEntities(gameState);
@@ -1071,18 +1046,29 @@ export function computeRoomAnswer(
       };
     }
 
-    case 'multi2_blessing_x_or_y': {
-      const activeIds = gameState.settings.selectedBlessingIds && gameState.settings.selectedBlessingIds.length === 5
-        ? gameState.settings.selectedBlessingIds
-        : [1, 2, 3, 4, 5];
-      const targetBlessingId = activeIds[(numericParam || 1) - 1] ?? numericParam;
-      const inPlay = chosenBlessingId === targetBlessingId;
+    case 'multi3_next_failed_vote_pass': {
       return {
-        trueAnswer: inPlay ? 'Yes' : 'No',
-        recommendedLie: inPlay ? 'No' : 'Yes',
-        lieReasoning: inPlay
-          ? `Dark Blessing #${targetBlessingId} is in play.`
-          : `Dark Blessing #${targetBlessingId} is NOT in play.`,
+        trueAnswer: 'Yes',
+        recommendedLie: 'No',
+        lieReasoning: 'True answer is Yes (effect activates if room passes). Recommended lie is No.',
+        explanation: 'If this room passes, the next failed vote in a subsequent room will automatically turn to pass.',
+      };
+    }
+
+    case 'multi3_what_blessing_in_play': {
+      const activeIds = gameState.settings.selectedBlessingIds && gameState.settings.selectedBlessingIds.length > 0
+        ? gameState.settings.selectedBlessingIds
+        : [1, 2, 3, 4];
+      const foundIdx = activeIds.findIndex(id => id === chosenBlessingId);
+      const ordinals = ['1st', '2nd', '3rd', '4th'];
+      const trueAns = foundIdx !== -1 && foundIdx < 4 ? ordinals[foundIdx] : '1st';
+      const lie = trueAns === '1st' ? '2nd' : '1st';
+      const blessingName = chosenBlessingId ? (DARK_BLESSINGS.find(b => b.id === chosenBlessingId)?.name || `Blessing #${chosenBlessingId}`) : 'Unknown';
+      return {
+        trueAnswer: trueAns,
+        recommendedLie: lie,
+        lieReasoning: `True Dark Blessing in play is ${blessingName} (${trueAns} slot). Lie of ${lie} misdirects which blessing Dracula chose.`,
+        explanation: `Dracula chose ${blessingName}, which is in slot ${trueAns}.`,
       };
     }
 
@@ -1247,10 +1233,10 @@ export function resolveQuestionText(
   };
 
   if (fromPlayer && toPlayer && fromPlayer.id !== toPlayer.id) {
-    if (resolved.includes('Going clockwise starting with the room leader*')) {
-      resolved = `Going clockwise starting with the room leader* (${fromPlayer.name} to ${toPlayer.name}), how many Evil players are between these 2 players?`;
-    } else if (resolved.includes('Going counter clockwise starting with the room leader*')) {
-      resolved = `Going counter-clockwise starting with the room leader* (${fromPlayer.name} to ${toPlayer.name}), how many Evil players are between these 2 players?`;
+    if (resolved.includes('Going clockwise from the Room Leader')) {
+      resolved = `Going clockwise from the Room Leader (${fromPlayer.name} to ${toPlayer.name}), how many Evil players are between us?`;
+    } else if (resolved.includes('Going counter clockwise from the Room Leader')) {
+      resolved = `Going counter-clockwise from the Room Leader (${fromPlayer.name} to ${toPlayer.name}), how many Evil players are between us?`;
     }
   }
 
@@ -1270,6 +1256,9 @@ export function resolveQuestionText(
   if (numericParam !== undefined) {
     const ord = ordinalMap[numericParam] || `${numericParam}th`;
     resolved = resolved.replace(/\[1st\/2nd\/3rd\/4th\/5th\]/g, ord);
+    resolved = resolved.replace(/\[1st\/2nd\/3rd\/4th\]/g, ord);
+    resolved = resolved.replace(/\[1st\/2nd\/3rd\]/g, ord);
+    resolved = resolved.replace(/\[1st \/ 2nd \/ 3rd\]/g, ord);
     resolved = resolved.replace(/\[X\] or \[Y\]/g, `#${numericParam}`);
     resolved = resolved.replace(/___ seats/g, `${numericParam} seats`);
   }
