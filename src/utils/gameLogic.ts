@@ -27,7 +27,7 @@ export function getPlayerRegisteredTeam(
     return getPlayerRealTeam(player);
   }
 
-  const { chosenBlessingId, corruptedPlayerId, effigyPlayerId, darkVeilDraculaPlayerId, darkVeilBridePlayerIds, soulSwapGoodPlayerId, soulSwapBridePlayerId } = gameState;
+  const { chosenBlessingId, corruptedPlayerId, darkVeilDraculaPlayerId, darkVeilBridePlayerIds, soulSwapGoodPlayerId, soulSwapBridePlayerId } = gameState;
 
   // Blessing 10: Soul Swap - when one is selected, the other is selected instead.
   // Seating geometry handles the swap by moving seats instead (see getSeatedEntities), so it
@@ -45,11 +45,9 @@ export function getPlayerRegisteredTeam(
     return 'good';
   }
 
-  // Blessing 8: Blood Effigy - chosen Good player registers as Dracula (and therefore Evil);
-  // real Dracula registers as a Bride (still Evil).
-  if (chosenBlessingId === 8 && effigyPlayerId && player.id === effigyPlayerId) {
-    return 'evil';
-  }
+  // Blessing 8: Blood Effigy - chosen player registers as a *Good* Dracula; the real Dracula
+  // registers as an Evil Bride (confirmed by the designer). Teams stay as-is; only roles change
+  // (see getPlayerRegisteredRole).
 
   // Blessing 1: Blood Corruption
   if (player.isCorrupted || (chosenBlessingId === 1 && corruptedPlayerId === player.id)) {
