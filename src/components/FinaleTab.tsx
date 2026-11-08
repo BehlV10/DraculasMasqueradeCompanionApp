@@ -40,7 +40,11 @@ export const FinaleTab: React.FC<FinaleTabProps> = ({ gameState, setGameState })
 
   // Dracula's Last Chance state
   const isFivePlayerGame = settings.playerCount === 5;
-  const requiredHunterGuesses = settings.playerCount <= 8 ? 2 : 3;
+  // 6–8 players: 2 Hunters; 9+: 3. At 5 players Last Chance only exists via Winged Spies,
+  // which adds a single Hunter, so Dracula needs to name that one.
+  const requiredHunterGuesses = isFivePlayerGame
+    ? Math.max(1, players.filter(p => p.role === 'hunter').length)
+    : settings.playerCount <= 8 ? 2 : 3;
   const [guessedHunters, setGuessedHunters] = useState<string[]>(gameState.draculaGuessedHunterIds || []);
   const [draculaTimerActive, setDraculaTimerActive] = useState<boolean>(false);
   const [draculaSecondsRemaining, setDraculaSecondsRemaining] = useState<number>(180); // 3 minutes

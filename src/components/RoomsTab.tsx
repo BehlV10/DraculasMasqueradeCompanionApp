@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { GameState, RoomHeartCount, RoomLogEntry, RoomCardDefinition, RoomCardCategory } from '../types/game';
-import { ROOM_CARDS, ROOM_CATEGORIES } from '../data/gameData';
-import { computeRoomAnswer, getPlayerColor, isEvilRole, resolveQuestionText } from '../utils/gameLogic';
+import { DARK_BLESSINGS, ROOM_CARDS, ROOM_CATEGORIES } from '../data/gameData';
+import { computeRoomAnswer, getBlessingSlots, getPlayerColor, isEvilRole, resolveQuestionText } from '../utils/gameLogic';
 import { playFailSound, playPassSound } from '../utils/sound';
 import { TimerWidget } from './TimerWidget';
 import { SeatingChart } from './SeatingChart';
@@ -40,6 +40,14 @@ interface RoomsTabProps {
   };
 }
 
+const LIST_PLAYERS_CARD_IDS = [
+  'multi3_are_these_all_good',
+  'multi3_are_these_all_evil',
+  'multi3_is_dracula_among_them',
+  'multi3_players_all_voted_pass_prior',
+  'multi3_players_all_in_failed_room_prior',
+];
+
 export const RoomsTab: React.FC<RoomsTabProps> = ({
   gameState,
   setGameState,
@@ -61,6 +69,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   const [targetPlayerAId, setTargetPlayerAId] = useState<string>('');
   const [targetPlayerBId, setTargetPlayerBId] = useState<string>('');
   const [numericParam, setNumericParam] = useState<number>(1);
+  // Players named aloud on "List players..." cards
+  const [listedPlayerIds, setListedPlayerIds] = useState<string[]>([]);
   const [answerGiven, setAnswerGiven] = useState<string>('');
   
   // Table view toggle state
@@ -271,6 +281,14 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   const participantPlayers = participantIds.map(id => players.find(p => p.id === id)!).filter(Boolean);
   const targetPlayerA = players.find(p => p.id === targetPlayerAId);
   const targetPlayerB = players.find(p => p.id === targetPlayerBId);
+  const isListCard = LIST_PLAYERS_CARD_IDS.includes(selectedQuestion.id);
+  const listedPlayers = isListCard
+    ? players.filter(p => listedPlayerIds.includes(p.id))
+    : [];
+  const toggleListedPlayer = (pId: string) => {
+    setListedPlayerIds(prev => (prev.includes(pId) ? prev.filter(id => id !== pId) : [...prev, pId]));
+  };
+  const blessingSlots = getBlessingSlots(gameState);
   const draculaPlayer = players.find(p => p.role === 'dracula');
 
   const isBetweenQuestion =
@@ -289,7 +307,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
         participantPlayers,
         targetPlayerA,
         targetPlayerB,
-        numericParam
+        numericParam,
+        listedPlayers
       )
     : null;
 
@@ -363,7 +382,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
         targetPlayerB,
         numericParam,
         isBetweenQuestion ? fromPlayer : undefined,
-        isBetweenQuestion ? toPlayer : undefined
+        isBetweenQuestion ? toPlayer : undefined,
+        listedPlayers
       ),
       calculatedTrueAnswer: answerAnalysis?.trueAnswer,
       suggestedLie: answerAnalysis?.recommendedLie,
@@ -405,6 +425,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
     setVotes({});
     setAnswerGiven('');
+    setListedPlayerIds([]);
   };
 
   const renderCardItem = (card: RoomCardDefinition) => {
@@ -839,6 +860,49 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
             </div>
           )}
 
+          {isListCard && (
+            <div className="mt-2.5 p-2.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                  Players Listed ({listedPlayers.length}):
+                </label>
+                {listedPlayers.length > 0 && (
+                  <button
+                    onClick={() => setListedPlayerIds([])}
+                    className="text-[10px] text-zinc-500 hover:text-rose-300"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {players.map(p => {
+                  const isListed = listedPlayerIds.includes(p.id);
+                  const pColor = getPlayerColor(p.colorId);
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => toggleListedPlayer(p.id)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                        isListed
+                          ? 'bg-rose-950 text-rose-200 border-rose-600 shadow-sm'
+                          : 'bg-zinc-900 text-zinc-400 border-zinc-800'
+                      }`}
+                    >
+                      <span
+                        style={{ backgroundColor: pColor.hex, color: pColor.textColor }}
+                        className="w-4 h-4 rounded font-mono text-[9px] font-bold flex items-center justify-center"
+                      >
+                        {p.seat}
+                      </span>
+                      {p.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {(selectedQuestion.question.includes('[1st') || selectedQuestion.question.includes('___ seats')) && (
             <div className="mt-2.5 p-2.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
               <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
@@ -854,7 +918,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 {(selectedQuestion.id === 'multi3_player_room_number_fail'
                   ? [1, 2, 3]
                   : selectedQuestion.id === 'solo_blessing_in_play'
-                  ? [1, 2, 3, 4]
+                  ? blessingSlots.slice(0, 4).map((_, i) => i + 1)
                   : selectedQuestion.id === 'multi3_dracula_within_x'
                   ? [0, 1, 2, 3, 4, 5, 6, 7, 8]
                   : [1, 2, 3, 4]
@@ -871,7 +935,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                     {selectedQuestion.id === 'multi3_player_room_number_fail'
                       ? `${num === 1 ? '1st' : num === 2 ? '2nd' : '3rd'} Room`
                       : selectedQuestion.id === 'solo_blessing_in_play'
-                      ? `${num === 1 ? '1st' : num === 2 ? '2nd' : num === 3 ? '3rd' : '4th'} Blessing`
+                      ? `${num === 1 ? '1st' : num === 2 ? '2nd' : num === 3 ? '3rd' : '4th'}: ${DARK_BLESSINGS.find(b => b.id === blessingSlots[num - 1])?.name ?? '?'}`
                       : selectedQuestion.id === 'multi3_dracula_within_x'
                       ? `${num} ${num === 1 ? 'Seat' : 'Seats'}`
                       : `#${num}`}

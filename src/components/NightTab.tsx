@@ -141,11 +141,38 @@ export const NightTab: React.FC<NightTabProps> = ({
       }
 
       // Clean up previous blessing artifacts when switching blessings
-      const cleanedPlayers = prev.players.map(p => ({
+      let cleanedPlayers = prev.players.map(p => ({
         ...p,
         isCorrupted: bId === 1 ? p.isCorrupted : false,
         isPuppet: bId === 2 ? p.isPuppet : false,
       }));
+
+      // Winged Spies at 5 players: "Add a random Hunter." Convert a random Guest into a random
+      // Hunter while Winged Spies is chosen; revert if Dracula switches to another blessing.
+      let wingedAddedHunterPlayerId = prev.wingedAddedHunterPlayerId ?? null;
+      if (bId !== 7 && wingedAddedHunterPlayerId) {
+        const revertId = wingedAddedHunterPlayerId;
+        cleanedPlayers = cleanedPlayers.map(p =>
+          p.id === revertId ? { ...p, role: 'guest' as const, hunterType: undefined } : p
+        );
+        wingedAddedHunterPlayerId = null;
+      }
+      if (
+        bId === 7 &&
+        prev.settings.playerCount === 5 &&
+        !wingedAddedHunterPlayerId &&
+        !cleanedPlayers.some(p => p.role === 'hunter')
+      ) {
+        const guestPool = cleanedPlayers.filter(p => p.role === 'guest');
+        if (guestPool.length > 0) {
+          const chosen = guestPool[Math.floor(Math.random() * guestPool.length)];
+          const hunterType = HUNTERS[Math.floor(Math.random() * HUNTERS.length)].id;
+          cleanedPlayers = cleanedPlayers.map(p =>
+            p.id === chosen.id ? { ...p, role: 'hunter' as const, hunterType } : p
+          );
+          wingedAddedHunterPlayerId = chosen.id;
+        }
+      }
 
       return {
         ...prev,
@@ -163,6 +190,7 @@ export const NightTab: React.FC<NightTabProps> = ({
         soulSwapGoodPlayerId: bId === 10 ? prev.soulSwapGoodPlayerId : null,
         soulSwapBridePlayerId: bId === 10 ? prev.soulSwapBridePlayerId : null,
         players: cleanedPlayers,
+        wingedAddedHunterPlayerId,
         restlessSpirits: bId === 3 ? nextSpirits : prev.restlessSpirits,
       };
     });
@@ -929,7 +957,16 @@ export const NightTab: React.FC<NightTabProps> = ({
             )}
             {gameState.settings.playerCount === 5 && (
               <p className="text-[11px] text-amber-300 italic">
-                ⭐ At 5 players: Winged Spies allows Evil to win through Dracula's Last Chance during the Finale!
+                ⭐ At 5 players: Winged Spies adds a random Hunter and allows Evil to win through Dracula's Last Chance during the Finale!
+                {gameState.wingedAddedHunterPlayerId && (() => {
+                  const added = players.find(p => p.id === gameState.wingedAddedHunterPlayerId);
+                  const hName = HUNTERS.find(h => h.id === added?.hunterType)?.name;
+                  return added ? (
+                    <span className="block mt-1 not-italic font-semibold">
+                      Added Hunter: {added.name} ({getPlayerColor(added.colorId).name}, Seat {added.seat}) is now {hName}. Secretly swap their Guest card for this Hunter card.
+                    </span>
+                  ) : null;
+                })()}
               </p>
             )}
           </div>
@@ -962,7 +999,7 @@ export const NightTab: React.FC<NightTabProps> = ({
             </div>
             {effigyPlayerId && (
               <div className="p-2 rounded-lg bg-rose-950/50 border border-rose-700 text-xs text-rose-200">
-                🩸 {players.find(p => p.id === effigyPlayerId)?.name} is the Blood Effigy! In room questions they register as Dracula, and real Dracula registers as a Bride. Good must shoot this player to win!
+                🩸 {players.find(p => p.id === effigyPlayerId)?.name} is the Blood Effigy! In room questions they register as Dracula (and Evil), and real Dracula registers as a Bride. Good must shoot this player to win!
               </div>
             )}
           </div>
