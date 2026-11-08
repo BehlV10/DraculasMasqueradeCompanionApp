@@ -116,6 +116,7 @@ export interface GameState {
   // Set 2 Blessings State
   twistedPlayerId?: string | null; // Blessing 6: Twisted Whispers
   wingedHunterId?: string | null; // Blessing 7: Winged Spies
+  wingedAddedHunterPlayerId?: string | null; // Blessing 7 at 5 players: Guest converted to a random Hunter
   effigyPlayerId?: string | null; // Blessing 8: Blood Effigy
   darkVeilDraculaPlayerId?: string | null; // Blessing 9: Dark Veil fake Dracula
   darkVeilBridePlayerIds?: string[]; // Blessing 9: Dark Veil fake Brides

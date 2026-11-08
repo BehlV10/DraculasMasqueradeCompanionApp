@@ -82,6 +82,7 @@ const defaultInitialState: GameState = {
   echoingCurseDraculaVotedFail: false,
   twistedPlayerId: null,
   wingedHunterId: null,
+  wingedAddedHunterPlayerId: null,
   effigyPlayerId: null,
   darkVeilDraculaPlayerId: null,
   darkVeilBridePlayerIds: [],
