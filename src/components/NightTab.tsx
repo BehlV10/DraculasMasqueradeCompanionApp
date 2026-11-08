@@ -999,7 +999,7 @@ export const NightTab: React.FC<NightTabProps> = ({
             </div>
             {effigyPlayerId && (
               <div className="p-2 rounded-lg bg-rose-950/50 border border-rose-700 text-xs text-rose-200">
-                🩸 {players.find(p => p.id === effigyPlayerId)?.name} is the Blood Effigy! In room questions they register as Dracula (and Evil), and real Dracula registers as a Bride. Good must shoot this player to win!
+                🩸 {players.find(p => p.id === effigyPlayerId)?.name} is the Blood Effigy! In room questions they register as Good and as Dracula, and real Dracula registers as Evil and as a Bride. Good must shoot this player to win!
               </div>
             )}
           </div>

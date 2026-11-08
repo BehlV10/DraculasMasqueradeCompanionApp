@@ -123,8 +123,8 @@ export const DARK_BLESSINGS: DarkBlessing[] = [
     id: 8,
     set: 2,
     name: 'Blood Effigy',
-    description: 'Choose a Good player. They register as Dracula (and Evil), and Dracula registers as a Bride. Good must shoot that chosen player to win.',
-    shortEffect: 'Chosen Good player registers as Dracula & Evil. Real Dracula registers as Bride.',
+    description: 'Choose a Good player. They register as Good and as Dracula, and Dracula registers as Evil and as a Bride. Good must shoot that chosen player to win.',
+    shortEffect: 'Chosen player registers as a Good Dracula. Real Dracula registers as an Evil Bride.',
   },
   {
     id: 9,
